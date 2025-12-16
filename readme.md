@@ -58,3 +58,9 @@ $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
 # Of met PSCredential:
 #   $cred = Get-Credential -Message "Enter PFX password" -UserName "ignored"
 #   ./build-release.ps1 -Sign -PfxPath "C:\path\to\colorfabb.pfx" -PfxCredential $cred
+
+# Code signing in GitHub Actions (optioneel)
+# Zet deze repo secrets om signing in CI aan te zetten:
+# - CODESIGN_PFX_BASE64      -> base64 van jullie .pfx bestand
+# - CODESIGN_PFX_PASSWORD    -> het wachtwoord van de .pfx
+# Zonder deze secrets blijft de workflow gewoon unsigned builds maken.

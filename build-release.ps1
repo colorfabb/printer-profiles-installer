@@ -11,6 +11,26 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
+function Find-SignTool {
+    $cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+
+    $kits = @(
+        "C:\Program Files (x86)\Windows Kits\10\bin",
+        "C:\Program Files\Windows Kits\10\bin"
+    )
+
+    foreach ($base in $kits) {
+        if (-not (Test-Path $base)) { continue }
+        $found = Get-ChildItem -Path $base -Recurse -Filter signtool.exe -File -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($found) { return $found.FullName }
+    }
+
+    return $null
+}
+
 # Build
 if (Test-Path .\dist) { Remove-Item -Recurse -Force .\dist }
 if (Test-Path .\build) { Remove-Item -Recurse -Force .\build }
@@ -20,13 +40,6 @@ Write-Host "Building one-file EXE via spec..." -ForegroundColor Cyan
 
 $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $exe) { throw "Build produced no dist\\colorFabbInstaller_v*.exe" }
-
-# SHA256
-$hash = (Get-FileHash -Algorithm SHA256 $exe.FullName).Hash.ToLowerInvariant()
-$shaFile = Join-Path $exe.DirectoryName ($exe.BaseName + ".sha256.txt")
-$shaLine = "$hash  $($exe.Name)"
-Set-Content -Path $shaFile -Value $shaLine -Encoding ASCII
-Write-Host "Wrote SHA256: $shaFile" -ForegroundColor Green
 
 # Optional signing (requires Windows SDK signtool + your code signing certificate)
 if ($Sign) {
@@ -45,9 +58,9 @@ if ($Sign) {
 
     if (-not $PfxPassword) { throw "PFX password was not provided" }
 
-    $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
-    if (-not $signtool) {
-        throw "signtool.exe not found on PATH. Install Windows SDK (App Certification Kit / SignTool) or add it to PATH."
+    $signtoolPath = Find-SignTool
+    if (-not $signtoolPath) {
+        throw "signtool.exe not found. Install Windows SDK (SignTool) or add it to PATH."
     }
 
     Write-Host "Signing EXE..." -ForegroundColor Cyan
@@ -56,7 +69,7 @@ if ($Sign) {
     try {
         $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($PfxPassword)
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-        & $signtool.Source sign /fd SHA256 /f $PfxPath /p $plain /tr $TimestampUrl /td SHA256 $exe.FullName
+        & $signtoolPath sign /fd SHA256 /f $PfxPath /p $plain /tr $TimestampUrl /td SHA256 $exe.FullName
     }
     finally {
         if ($bstr -ne [IntPtr]::Zero) {
@@ -66,9 +79,16 @@ if ($Sign) {
     }
 
     Write-Host "Verifying signature..." -ForegroundColor Cyan
-    & $signtool.Source verify /pa /v $exe.FullName
+    & $signtoolPath verify /pa /v $exe.FullName
 
     Write-Host "Signed: $($exe.Name)" -ForegroundColor Green
 }
+
+# SHA256 (after optional signing, because signing changes the file hash)
+$hash = (Get-FileHash -Algorithm SHA256 $exe.FullName).Hash.ToLowerInvariant()
+$shaFile = Join-Path $exe.DirectoryName ($exe.BaseName + ".sha256.txt")
+$shaLine = "$hash  $($exe.Name)"
+Set-Content -Path $shaFile -Value $shaLine -Encoding ASCII
+Write-Host "Wrote SHA256: $shaFile" -ForegroundColor Green
 
 Write-Host "Done. Output: $($exe.FullName)" -ForegroundColor Green

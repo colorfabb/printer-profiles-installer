@@ -25,10 +25,24 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Build EXE + SHA256
+      - name: Build EXE (+ optional signing) + SHA256
         shell: pwsh
+        env:
+          CODESIGN_PFX_BASE64: ${{ secrets.CODESIGN_PFX_BASE64 }}
+          CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
         run: |
-          ./build-release.ps1
+          if ($env:CODESIGN_PFX_BASE64 -and $env:CODESIGN_PFX_PASSWORD) {
+            Write-Host "Code signing enabled (secrets provided)." -ForegroundColor Cyan
+            $pfxPath = Join-Path $PWD "codesign.pfx"
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_BASE64))
+            $pw = ConvertTo-SecureString $env:CODESIGN_PFX_PASSWORD -AsPlainText -Force
+            ./build-release.ps1 -Sign -PfxPath $pfxPath -PfxPassword $pw
+            Remove-Item $pfxPath -Force
+          }
+          else {
+            Write-Host "Code signing disabled (no secrets)." -ForegroundColor Yellow
+            ./build-release.ps1
+          }
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
