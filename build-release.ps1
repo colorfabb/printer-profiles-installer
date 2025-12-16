@@ -74,7 +74,10 @@ if ($Sign) {
     try {
         $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($PfxPassword)
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-        & $signtoolPath sign /fd SHA256 /f $PfxPath /p $plain /tr $TimestampUrl /td SHA256 $exe.FullName
+        $signOut = & $signtoolPath sign /fd SHA256 /a /f $PfxPath /p $plain /tr $TimestampUrl /td SHA256 $exe.FullName 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            throw "signtool sign failed (exit $LASTEXITCODE). Output:`n$signOut"
+        }
     }
     finally {
         if ($bstr -ne [IntPtr]::Zero) {
@@ -84,7 +87,13 @@ if ($Sign) {
     }
 
     Write-Host "Verifying signature..." -ForegroundColor Cyan
-    & $signtoolPath verify /pa /v $exe.FullName
+    $verifyOut = & $signtoolPath verify /pa /v $exe.FullName 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "signtool verify failed (exit $LASTEXITCODE). Output:`n$verifyOut"
+    }
+
+    # Ensure the script doesn't exit with a non-zero code from a previous native command
+    $global:LASTEXITCODE = 0
 
     Write-Host "Signed: $($exe.Name)" -ForegroundColor Green
 }

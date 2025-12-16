@@ -19,7 +19,7 @@ except Exception:
     GUI_ENABLED = False
 
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.6"
+VERSION = "1.6.7"
 
 GITHUB_ZIP_URL = "https://github.com/colorfabb/printer-profiles/archive/refs/heads/main.zip"
 EXPECTED_SHA256 = None

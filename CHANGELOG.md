@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.7] - 2025-12-16
+### Fixed
+- CI code signing: surface the actual `signtool` error output (and avoid ambiguous exit code 1).
+
 ## [1.6.6] - 2025-12-16
 ### Fixed
 - GitHub Actions: harden code signing step (sanitize base64 secret and validate PFX/password) to prevent signing failures.
