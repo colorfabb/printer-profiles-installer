@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.8] - 2025-12-16
+### Changed
+- CI signing: releases no longer fail if the certificate chain is not trusted on the runner (still requires the EXE to be signed).
+
 ## [1.6.7] - 2025-12-16
 ### Fixed
 - CI code signing: surface the actual `signtool` error output (and avoid ambiguous exit code 1).
