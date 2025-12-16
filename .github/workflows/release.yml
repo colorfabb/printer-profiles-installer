@@ -44,6 +44,16 @@ jobs:
             ./build-release.ps1
           }
 
+      - name: Verify signature (when enabled)
+        if: ${{ secrets.CODESIGN_PFX_BASE64 != '' && secrets.CODESIGN_PFX_PASSWORD != '' }}
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
+          if (-not $exe) { throw "No EXE found in dist/" }
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          $sig | Format-List | Out-String | Write-Host
+          if ($sig.Status -ne 'Valid') { throw "Authenticode signature is not valid: $($sig.Status)" }
+
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
