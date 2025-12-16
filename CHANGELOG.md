@@ -6,6 +6,13 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.4] - 2025-12-16
+### Fixed
+- GitHub Actions: fixed workflow validation error so release builds can run again.
+
+### Changed
+- Docs: user README and build instructions are now English-only.
+
 ## [1.6.3] - 2025-12-16
 ### Fixed
 - CI/GitHub Releases build: remove hard-coded local paths and venv dependency so the Windows build works on GitHub Actions.
