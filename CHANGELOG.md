@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.3] - 2025-12-16
+### Fixed
+- CI/GitHub Releases build: remove hard-coded local paths and venv dependency so the Windows build works on GitHub Actions.
+
 ## [1.6.2] - 2025-12-16
 ### Added
 - `--check-download` CLI mode to validate HTTPS download + ZIP integrity/extraction without running the GUI.

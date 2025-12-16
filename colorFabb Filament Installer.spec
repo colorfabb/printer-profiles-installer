@@ -107,7 +107,14 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\DevOps\\printer-profiles-installer-py\\logo\\cF_Logo.png', 'logo')],
+    datas=[(
+        str(
+            (SPEC_DIR / 'Logo' / 'cF_Logo.png')
+            if (SPEC_DIR / 'Logo' / 'cF_Logo.png').is_file()
+            else (SPEC_DIR / 'logo' / 'cF_Logo.png')
+        ),
+        'logo',
+    )],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

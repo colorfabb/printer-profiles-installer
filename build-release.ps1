@@ -35,8 +35,13 @@ function Find-SignTool {
 if (Test-Path .\dist) { Remove-Item -Recurse -Force .\dist }
 if (Test-Path .\build) { Remove-Item -Recurse -Force .\build }
 
+$pythonExe = Join-Path $root ".venv\Scripts\python.exe"
+if (-not (Test-Path $pythonExe)) {
+    $pythonExe = (Get-Command python).Source
+}
+
 Write-Host "Building one-file EXE via spec..." -ForegroundColor Cyan
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean ".\colorFabb Filament Installer.spec"
+& $pythonExe -m PyInstaller --noconfirm --clean ".\colorFabb Filament Installer.spec"
 
 $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $exe) { throw "Build produced no dist\\colorFabbInstaller_v*.exe" }
