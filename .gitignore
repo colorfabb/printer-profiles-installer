@@ -1,0 +1,29 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+_pyinstaller_version_info.txt
+
+# Bundled third-party binaries (prefer downloading in CI/local)
+tools/upx/
+tools/upx.zip
+
+# Temporary/debug helpers
+_version_probe.py
+
+# Logs/temp
+*.log
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
