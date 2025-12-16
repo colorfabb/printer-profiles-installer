@@ -1,50 +1,50 @@
 # Build / release (dev)
 
-Deze repo bouwt een Windows **single-file** installer EXE (PyInstaller onefile).
+This repo builds a Windows **single-file** installer EXE (PyInstaller onefile).
 
-## Build (lokaal)
+## Build (local)
 
 ```powershell
-# Controleer of het logo bestaat
+# Check if the logo exists
 Test-Path .\logo\cF_Logo.png   # True
 
-# Clean build (met logo meepakken)
+# Clean build (include logo)
 taskkill /IM "colorFabbInstaller_v*.exe" /F 2>$null
 Remove-Item -Recurse -Force .\dist, .\build -ErrorAction SilentlyContinue
 
-# Build 1 EXE via de (aangepaste) .spec
-# Dit houdt de output als één enkel bestand, maar laat ons ongebruikte Qt/PySide6
-# componenten uitsluiten om het kleiner te maken.
-# Ook de Windows "File version" / "Product version" wordt automatisch gezet op basis van VERSION in main.py.
+# Build a single EXE via the (custom) .spec
+# This keeps the output as one file, while allowing us to exclude unused Qt/PySide6
+# components to reduce size.
+# Windows "File version" / "Product version" are set automatically based on VERSION in main.py.
 
-# (Optioneel) UPX compressie: zet UPX_DIR naar de map waar upx.exe staat
+# (Optional) UPX compression: set UPX_DIR to the folder containing upx.exe
 # $env:UPX_DIR = "C:\Tools\upx"
 
-# (Optioneel) Extra size-trims (blijft 1 EXE)
-# - CF_EXCLUDE_QJPEG=1          -> verwijdert Qt JPEG plugin (alleen doen als je nooit JPG laadt)
-# - CF_EXCLUDE_OPENGL_SW=1      -> verwijdert Qt software OpenGL fallback (grote winst, maar kan op
-#                                 sommige pc's / remote desktop rendering issues geven)
-# Voorbeeld:
+# (Optional) Extra size trims (still 1 EXE)
+# - CF_EXCLUDE_QJPEG=1          -> removes Qt JPEG plugin (only if you never need JPG)
+# - CF_EXCLUDE_OPENGL_SW=1      -> removes Qt software OpenGL fallback (big win, but may cause
+#                                 rendering issues on some PCs / remote desktop setups)
+# Example:
 # $env:CF_EXCLUDE_OPENGL_SW = "1"
 # $env:CF_EXCLUDE_QJPEG = "1"
 
 python -m PyInstaller --noconfirm --clean ".\colorFabb Filament Installer.spec"
 ```
 
-## Release build (aanrader)
+## Release build (recommended)
 
 `build-release.ps1`:
-- bouwt de EXE
-- schrijft een SHA256 checksumbestand naast de EXE
-- (optioneel) signeert de EXE met een PFX
+- builds the EXE
+- writes a SHA256 checksum file next to the EXE
+- (optional) code-signs the EXE with a PFX
 
 ```powershell
 ./build-release.ps1
 ```
 
-### Download test (zonder installeren)
+### Download self-test (without installing)
 
-Handig om te checken of HTTPS download + ZIP validatie werkt in de EXE.
+Useful to verify HTTPS download + ZIP validation inside the packaged EXE.
 
 ```powershell
 $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
@@ -53,7 +53,7 @@ $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
 
 ## GitHub Releases (EXE als asset)
 
-Push een tag om een release-build te triggeren:
+Push a tag to trigger a release build:
 
 ```powershell
 git tag v1.6.3
@@ -61,19 +61,20 @@ git push origin v1.6.3
 ```
 
 De GitHub Actions workflow bouwt en uploadt:
+The GitHub Actions workflow builds and uploads:
 - `dist\colorFabbInstaller_vX.Y.Z.exe`
 - `dist\colorFabbInstaller_vX.Y.Z.sha256.txt`
 
 ## Code signing
 
-Vereist: code signing certificaat (meestal PFX) + `signtool.exe` (Windows SDK).
+Requires: a code signing certificate (usually PFX) + `signtool.exe` (Windows SDK).
 
 ```powershell
 $pw = Read-Host -AsSecureString "PFX password"
 ./build-release.ps1 -Sign -PfxPath "C:\path\to\colorfabb.pfx" -PfxPassword $pw
 ```
 
-Of met `PSCredential`:
+Or using `PSCredential`:
 
 ```powershell
 $cred = Get-Credential -Message "Enter PFX password" -UserName "ignored"
@@ -82,17 +83,17 @@ $cred = Get-Credential -Message "Enter PFX password" -UserName "ignored"
 
 ### Code signing in GitHub Actions (optioneel)
 
-Zet deze repo secrets om signing in CI aan te zetten:
-- `CODESIGN_PFX_BASE64` (base64 van jullie `.pfx`)
-- `CODESIGN_PFX_PASSWORD` (wachtwoord)
+Set these repo secrets to enable signing in CI:
+- `CODESIGN_PFX_BASE64` (base64 of your `.pfx`)
+- `CODESIGN_PFX_PASSWORD` (password)
 
-Zonder deze secrets blijft de workflow gewoon unsigned builds maken.
+Without these secrets the workflow will produce unsigned builds.
 
-## Verificatie checklist (na Release)
+## Verification checklist (after release)
 
 ```powershell
-# 1) Download de .exe en .sha256.txt van GitHub Releases.
-# 2) Controleer de hash lokaal:
+# 1) Download the .exe and .sha256.txt from GitHub Releases.
+# 2) Verify the hash locally:
 $sha = Get-Content .\colorFabbInstaller_vX.Y.Z.sha256.txt
 $local = (Get-FileHash -Algorithm SHA256 .\colorFabbInstaller_vX.Y.Z.exe).Hash.ToLowerInvariant()
 $sha -match $local

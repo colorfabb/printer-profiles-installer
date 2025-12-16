@@ -1,27 +1,27 @@
 
 # colorFabb Filament Installer
 
-Deze installer helpt je om de **officiële colorFabb printer/slicer profielen** te downloaden en te installeren op je Windows PC.
+This installer helps you download and install the **official colorFabb printer/slicer profiles** on your Windows PC.
 
-## Wat doet deze installer?
+## What does this installer do?
 
-- Downloadt de nieuwste profielen (ZIP) vanaf GitHub.
-- Controleert of de download/ZIP geldig is.
-- Installeert de juiste profielbestanden in de juiste map(pen) voor ondersteunde slicers.
+- Downloads the latest profiles (ZIP) from GitHub.
+- Validates that the download/ZIP is correct.
+- Installs the profile files into the correct folder(s) for supported slicers.
 
-## Gebruik (voor gebruikers)
+## How to use (end users)
 
-1. Download de nieuwste `colorFabbInstaller_vX.Y.Z.exe` uit **GitHub Releases**.
-2. Dubbelklik om te starten.
-3. Volg de stappen in het venster (selecteer slicer(s) / locatie(s) als daarom gevraagd wordt).
-4. Klik **Install** en wacht tot “Done/Completed”.
+1. Download the latest `colorFabbInstaller_vX.Y.Z.exe` from **GitHub Releases**.
+2. Double-click to start.
+3. Follow the steps in the window (select slicer(s) / location(s) if prompted).
+4. Click **Install** and wait until it shows “Done/Completed”.
 
-Tip: als Windows waarschuwt (SmartScreen), controleer dan de **SHA256** (en digitale handtekening als signing is ingeschakeld) bij de release.
+Tip: if Windows warns (SmartScreen), verify the **SHA256** (and the digital signature if signing is enabled) on the release.
 
 ## Troubleshooting
 
-- Downloadproblemen? Start de installer opnieuw en probeer opnieuw. Internet/SSL blokkades (proxy/AV) kunnen downloads verhinderen.
-- Wil je alleen testen of downloaden/uitpakken werkt (zonder GUI install)?
+- Download problems? Restart the installer and try again. Network/SSL blocking (proxy/AV) can prevent downloads.
+- Want to only test download/unzip (without doing the GUI install)?
 
 ```powershell
 colorFabbInstaller_vX.Y.Z.exe --check-download
@@ -29,4 +29,4 @@ colorFabbInstaller_vX.Y.Z.exe --check-download
 
 ## Voor developers
 
-Build/release instructies staan in `build.md`.
+Build/release instructions are in `build.md`.
