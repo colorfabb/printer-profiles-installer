@@ -64,3 +64,14 @@ $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
 # - CODESIGN_PFX_BASE64      -> base64 van jullie .pfx bestand
 # - CODESIGN_PFX_PASSWORD    -> het wachtwoord van de .pfx
 # Zonder deze secrets blijft de workflow gewoon unsigned builds maken.
+
+# Verificatie checklist (na Release)
+# 1) Download de .exe en .sha256.txt van GitHub Releases.
+# 2) Controleer de hash lokaal:
+#    $sha = Get-Content .\colorFabbInstaller_vX.Y.Z.sha256.txt
+#    $local = (Get-FileHash -Algorithm SHA256 .\colorFabbInstaller_vX.Y.Z.exe).Hash.ToLowerInvariant()
+#    $sha -match $local
+# 3) Controleer de signature (Windows):
+#    - Rechtsklik .exe -> Properties -> Digital Signatures
+#    - Of via signtool (als Windows SDK aanwezig is):
+#      signtool verify /pa /v .\colorFabbInstaller_vX.Y.Z.exe
