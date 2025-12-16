@@ -1,77 +1,32 @@
 
-# Controleer of het logo bestaat
-Test-Path .\logo\cF_Logo.png   # True
+# colorFabb Filament Installer
 
-# Clean build (met logo meepakken)
-taskkill /IM "colorFabbInstaller_v*.exe" /F 2>$null
-Remove-Item -Recurse -Force .\dist, .\build -ErrorAction SilentlyContinue
+Deze installer helpt je om de **officiële colorFabb printer/slicer profielen** te downloaden en te installeren op je Windows PC.
 
-# Build 1 EXE via de (aangepaste) .spec
-# Dit houdt de output als één enkel bestand, maar laat ons ongebruikte Qt/PySide6
-# componenten uitsluiten om het kleiner te maken.
-# Ook de Windows "File version" / "Product version" wordt automatisch gezet op basis van VERSION in main.py.
+## Wat doet deze installer?
 
-# (Optioneel) UPX compressie: zet UPX_DIR naar de map waar upx.exe staat
-# $env:UPX_DIR = "C:\Tools\upx"
+- Downloadt de nieuwste profielen (ZIP) vanaf GitHub.
+- Controleert of de download/ZIP geldig is.
+- Installeert de juiste profielbestanden in de juiste map(pen) voor ondersteunde slicers.
 
-# (Optioneel) Extra size-trims (blijft 1 EXE)
-# - CF_EXCLUDE_QJPEG=1          -> verwijdert Qt JPEG plugin (alleen doen als je nooit JPG laadt)
-# - CF_EXCLUDE_OPENGL_SW=1      -> verwijdert Qt software OpenGL fallback (grote winst, maar kan op
-#                                 sommige pc's / remote desktop rendering issues geven)
-# Voorbeeld:
-# $env:CF_EXCLUDE_OPENGL_SW = "1"
-# $env:CF_EXCLUDE_QJPEG = "1"
+## Gebruik (voor gebruikers)
 
-python -m PyInstaller --noconfirm --clean ".\colorFabb Filament Installer.spec"
+1. Download de nieuwste `colorFabbInstaller_vX.Y.Z.exe` uit **GitHub Releases**.
+2. Dubbelklik om te starten.
+3. Volg de stappen in het venster (selecteer slicer(s) / locatie(s) als daarom gevraagd wordt).
+4. Klik **Install** en wacht tot “Done/Completed”.
 
-# Release build (aanrader)
-# - bouwt de EXE
-# - schrijft een SHA256 checksumbestand naast de EXE
-# - (optioneel) signeert de EXE met jullie certificaat (PFX)
-./build-release.ps1
+Tip: als Windows waarschuwt (SmartScreen), controleer dan de **SHA256** (en digitale handtekening als signing is ingeschakeld) bij de release.
 
-# Download test (zonder installeren)
-# Handig om te checken of HTTPS download + ZIP validatie werkt in de EXE.
-# De EXE bestandsnaam bevat automatisch de VERSION uit main.py.
-# Voorbeeld: colorFabbInstaller_v1.2.3.exe
-$exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
-& $exe.FullName --check-download
+## Troubleshooting
 
-# GitHub Releases (EXE als asset)
-# 1) Maak een GitHub repo aan (op github.com) en push deze repo.
-# 2) Maak een release door een tag te pushen:
-#    git tag v1.6.2
-#    git push origin v1.6.2
-# De GitHub Actions workflow bouwt dan automatisch en uploadt:
-# - dist\colorFabbInstaller_vX.Y.Z.exe
-# - dist\colorFabbInstaller_vX.Y.Z.sha256.txt
+- Downloadproblemen? Start de installer opnieuw en probeer opnieuw. Internet/SSL blokkades (proxy/AV) kunnen downloads verhinderen.
+- Wil je alleen testen of downloaden/uitpakken werkt (zonder GUI install)?
 
-# SHA256 checksum bestand
-# Na ./build-release.ps1 krijg je:
-#   dist\colorFabbInstaller_vX.Y.Z.sha256.txt
+```powershell
+colorFabbInstaller_vX.Y.Z.exe --check-download
+```
 
-# Code signing (om Windows waarschuwingen te verminderen)
-# Vereist: code signing certificaat (meestal PFX) + signtool.exe (Windows SDK)
-# Voorbeeld:
-#   $pw = Read-Host -AsSecureString "PFX password"
-#   ./build-release.ps1 -Sign -PfxPath "C:\path\to\colorfabb.pfx" -PfxPassword $pw
-# Of met PSCredential:
-#   $cred = Get-Credential -Message "Enter PFX password" -UserName "ignored"
-#   ./build-release.ps1 -Sign -PfxPath "C:\path\to\colorfabb.pfx" -PfxCredential $cred
+## Voor developers
 
-# Code signing in GitHub Actions (optioneel)
-# Zet deze repo secrets om signing in CI aan te zetten:
-# - CODESIGN_PFX_BASE64      -> base64 van jullie .pfx bestand
-# - CODESIGN_PFX_PASSWORD    -> het wachtwoord van de .pfx
-# Zonder deze secrets blijft de workflow gewoon unsigned builds maken.
-
-# Verificatie checklist (na Release)
-# 1) Download de .exe en .sha256.txt van GitHub Releases.
-# 2) Controleer de hash lokaal:
-#    $sha = Get-Content .\colorFabbInstaller_vX.Y.Z.sha256.txt
-#    $local = (Get-FileHash -Algorithm SHA256 .\colorFabbInstaller_vX.Y.Z.exe).Hash.ToLowerInvariant()
-#    $sha -match $local
-# 3) Controleer de signature (Windows):
-#    - Rechtsklik .exe -> Properties -> Digital Signatures
-#    - Of via signtool (als Windows SDK aanwezig is):
-#      signtool verify /pa /v .\colorFabbInstaller_vX.Y.Z.exe
+Build/release instructies staan in `build.md`.
