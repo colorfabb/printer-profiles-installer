@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.6] - 2025-12-16
+### Fixed
+- GitHub Actions: harden code signing step (sanitize base64 secret and validate PFX/password) to prevent signing failures.
+
 ## [1.6.4] - 2025-12-16
 ### Fixed
 - GitHub Actions: fixed workflow validation error so release builds can run again.

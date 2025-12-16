@@ -34,7 +34,26 @@ jobs:
           if ($env:CODESIGN_PFX_BASE64 -and $env:CODESIGN_PFX_PASSWORD) {
             Write-Host "Code signing enabled (secrets provided)." -ForegroundColor Cyan
             $pfxPath = Join-Path $PWD "codesign.pfx"
-            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CODESIGN_PFX_BASE64))
+            try {
+              $b64 = ($env:CODESIGN_PFX_BASE64 -replace "\s", "")
+              $pfxBytes = [Convert]::FromBase64String($b64)
+            }
+            catch {
+              throw "CODESIGN_PFX_BASE64 is not valid base64 (check copy/paste and line breaks). $_"
+            }
+            [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+            # Validate that the PFX can be opened with the supplied password before invoking signtool
+            try {
+              $flags = [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+              $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pfxBytes, $env:CODESIGN_PFX_PASSWORD, $flags)
+              Write-Host ("PFX loaded OK. Subject: {0}" -f $cert.Subject) -ForegroundColor Green
+              $cert.Dispose()
+            }
+            catch {
+              throw "Unable to open PFX with CODESIGN_PFX_PASSWORD. $_"
+            }
+
             $pw = ConvertTo-SecureString $env:CODESIGN_PFX_PASSWORD -AsPlainText -Force
             ./build-release.ps1 -Sign -PfxPath $pfxPath -PfxPassword $pw
             Remove-Item $pfxPath -Force
