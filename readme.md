@@ -27,6 +27,6 @@ Tip: if Windows warns (SmartScreen), verify the **SHA256** (and the digital sign
 colorFabbInstaller_vX.Y.Z.exe --check-download
 ```
 
-## Voor developers
+## For developers
 
 Build/release instructions are in `build.md`.

@@ -51,7 +51,7 @@ $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
 & $exe.FullName --check-download
 ```
 
-## GitHub Releases (EXE als asset)
+## GitHub Releases (EXE as an asset)
 
 Push a tag to trigger a release build:
 
@@ -60,7 +60,6 @@ git tag v1.6.3
 git push origin v1.6.3
 ```
 
-De GitHub Actions workflow bouwt en uploadt:
 The GitHub Actions workflow builds and uploads:
 - `dist\colorFabbInstaller_vX.Y.Z.exe`
 - `dist\colorFabbInstaller_vX.Y.Z.sha256.txt`
@@ -81,7 +80,7 @@ $cred = Get-Credential -Message "Enter PFX password" -UserName "ignored"
 ./build-release.ps1 -Sign -PfxPath "C:\path\to\colorfabb.pfx" -PfxCredential $cred
 ```
 
-### Code signing in GitHub Actions (optioneel)
+### Code signing in GitHub Actions (optional)
 
 Set these repo secrets to enable signing in CI:
 - `CODESIGN_PFX_BASE64` (base64 of your `.pfx`)
