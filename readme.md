@@ -37,6 +37,15 @@ python -m PyInstaller --noconfirm --clean ".\colorFabb Filament Installer.spec"
 $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Select-Object -First 1
 & $exe.FullName --check-download
 
+# GitHub Releases (EXE als asset)
+# 1) Maak een GitHub repo aan (op github.com) en push deze repo.
+# 2) Maak een release door een tag te pushen:
+#    git tag v1.6.2
+#    git push origin v1.6.2
+# De GitHub Actions workflow bouwt dan automatisch en uploadt:
+# - dist\colorFabbInstaller_vX.Y.Z.exe
+# - dist\colorFabbInstaller_vX.Y.Z.sha256.txt
+
 # SHA256 checksum bestand
 # Na ./build-release.ps1 krijg je:
 #   dist\colorFabbInstaller_vX.Y.Z.sha256.txt
