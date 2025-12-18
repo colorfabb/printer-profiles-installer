@@ -1,3 +1,4 @@
+from __future__ import annotations
 
 # main.py (full, updated: full yellow Step 0 + improved list visibility + yellow taskbar icon + robust Select/Deselect All + delete deselected + logging/signal fixes)
 # colorFabb Filament Installer — 2026 look & feel
@@ -18,8 +19,43 @@ try:
 except Exception:
     GUI_ENABLED = False
 
+    class _QtStub:  # noqa: D401
+        pass
+
+    class _SignalStub:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def emit(self, *args, **kwargs):
+            pass
+
+    def Signal(*args, **kwargs):  # type: ignore
+        return _SignalStub(*args, **kwargs)
+
+    Qt = _QtStub
+    QSize = _QtStub
+    QThread = object
+    QApplication = object
+    QWidget = object
+    QVBoxLayout = object
+    QHBoxLayout = object
+    QLabel = object
+    QPushButton = object
+    QListWidget = object
+    QListWidgetItem = object
+    QProgressBar = object
+    QStackedWidget = object
+    QCheckBox = object
+    QMessageBox = object
+    QFileDialog = object
+    QLineEdit = object
+    QIcon = object
+    QPixmap = object
+    QPainter = object
+    QColor = object
+
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.8"
+VERSION = "1.6.11"
 
 GITHUB_ZIP_URL = "https://github.com/colorfabb/printer-profiles/archive/refs/heads/main.zip"
 EXPECTED_SHA256 = None
@@ -36,7 +72,84 @@ def appdata_base() -> Path:
     else:
         return Path.home() / ".config"
 
+def _bambu_studio_root_from_base(base: Path) -> Path:
+    """Resolve the BambuStudio root folder from a user-provided base path.
+
+    The UI allows browsing any folder, so handle common selections:
+    - %APPDATA% (Roaming)          -> base/BambuStudio
+    - %APPDATA%/BambuStudio       -> base
+    - %APPDATA%/BambuStudio/user  -> base.parent
+    """
+    try:
+        name = base.name.lower()
+    except Exception:
+        name = ""
+
+    if name == "bambustudio":
+        return base
+    if name == "user" and base.parent.name.lower() == "bambustudio":
+        return base.parent
+    return base / "BambuStudio"
+
+def _discover_bambu_user_profile_root(base: Path) -> Path:
+    """Pick the best BambuStudio user folder.
+
+    Deprecated in favor of `_discover_bambu_user_profile_roots()`.
+    Kept for compatibility; returns the most recently modified candidate.
+    """
+    roots = _discover_bambu_user_profile_roots(base)
+    return roots[0]
+
+def _discover_bambu_user_profile_roots(base: Path) -> list[Path]:
+    """Discover BambuStudio user folders.
+
+    BambuStudio creates per-account folders under %APPDATA%\\BambuStudio\\user\\<digits>.
+    Multiple accounts can be active, so we return *all* candidate folders, sorted by most
+    recently modified (descending).
+
+    Stricter rule: only numeric folders are considered active accounts. We fall back to
+    user\\default only if no numeric folders exist.
+    """
+    bambu_root = _bambu_studio_root_from_base(base)
+    user_root = bambu_root / "user"
+    default_root = user_root / "default"
+
+    if not user_root.exists():
+        return [default_root]
+
+    candidates: list[Path] = []
+    try:
+        for d in user_root.iterdir():
+            if not d.is_dir():
+                continue
+            # Strict: only numeric account folders.
+            if d.name.isdigit():
+                candidates.append(d)
+    except Exception:
+        candidates = []
+
+    if not candidates:
+        return [default_root]
+
+    # De-dupe while preserving order (after sort)
+    try:
+        candidates = sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    out: list[Path] = []
+    for p in candidates:
+        k = str(p)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(p)
+
+    return out if out else [default_root]
+
 def slicer_targets_from_base(base: Path):
+    bambu_user_roots = _discover_bambu_user_profile_roots(base)
     return {
         "PrusaSlicer": {
             "filament": base / "PrusaSlicer" / "filament",
@@ -47,8 +160,8 @@ def slicer_targets_from_base(base: Path):
             "process":  base / "OrcaSlicer" / "user" / "default" / "process",
         },
         "BambuStudio": {
-            "filament": base / "BambuStudio" / "user" / "default" / "filament",
-            "process":  base / "BambuStudio" / "user" / "default" / "process",
+            "filament": [p / "filament" for p in bambu_user_roots],
+            "process":  [p / "process" for p in bambu_user_roots],
         },
     }
 
@@ -360,8 +473,13 @@ if GUI_ENABLED:
                 cats = self.targets[name]
                 files_found = 0
                 for p in cats.values():
-                    if p.exists():
-                        files_found += sum(1 for f in p.glob("**/*") if f.is_file())
+                    if isinstance(p, list):
+                        for pp in p:
+                            if pp.exists():
+                                files_found += sum(1 for f in pp.glob("**/*") if f.is_file())
+                    else:
+                        if p.exists():
+                            files_found += sum(1 for f in p.glob("**/*") if f.is_file())
                 status = QLabel(mk_status_text(files_found))
                 status.setStyleSheet("color:{};".format("#0a8f08" if files_found>0 else "#c60000"))
 
@@ -379,8 +497,13 @@ if GUI_ENABLED:
                             cats2 = self.targets[s]
                             files = 0
                             for pth in cats2.values():
-                                if pth.exists():
-                                    files += sum(1 for f in pth.glob("**/*") if f.is_file())
+                                if isinstance(pth, list):
+                                    for pp in pth:
+                                        if pp.exists():
+                                            files += sum(1 for f in pp.glob("**/*") if f.is_file())
+                                else:
+                                    if pth.exists():
+                                        files += sum(1 for f in pth.glob("**/*") if f.is_file())
                             status.setText(mk_status_text(files))
                             status.setStyleSheet("color:{};".format("#0a8f08" if files>0 else "#c60000"))
                             self.base_changed.emit()
@@ -749,38 +872,70 @@ if GUI_ENABLED:
             slicer = it["slicer"]
             category = it.get("category", "filament")
             base = targets.get(slicer, {}).get(category)
-            if not base: return None
+            if not base:
+                return None
+            if isinstance(base, list):
+                return [b / it["src"].name for b in base]
             return base / it["src"].name
 
         def prepare_copy_and_delete_plans(self):
             targets = self.pg_slicers.targets_for_selected()
             for slicer, cats in targets.items():
-                for d in cats.values(): ensure_dir(d)
+                for d in cats.values():
+                    if isinstance(d, list):
+                        for dd in d:
+                            ensure_dir(dd)
+                    else:
+                        ensure_dir(d)
 
             all_dests = set()
             for it in self.pg_filament.items:
                 dst = self._dest_for_item(it, targets)
-                if dst: all_dests.add(dst)
+                if isinstance(dst, list):
+                    for d in dst:
+                        all_dests.add(d)
+                elif dst:
+                    all_dests.add(dst)
             for it in self.pg_process.items:
                 dst = self._dest_for_item(it, targets)
-                if dst: all_dests.add(dst)
+                if isinstance(dst, list):
+                    for d in dst:
+                        all_dests.add(d)
+                elif dst:
+                    all_dests.add(dst)
 
             sel_dests = set()
             for idx in self.pg_filament.selected_indices():
                 it = self.pg_filament.items[idx]; dst = self._dest_for_item(it, targets)
-                if dst: sel_dests.add(dst)
+                if isinstance(dst, list):
+                    for d in dst:
+                        sel_dests.add(d)
+                elif dst:
+                    sel_dests.add(dst)
             for idx in self.pg_process.selected_indices():
                 it = self.pg_process.items[idx];  dst = self._dest_for_item(it, targets)
-                if dst: sel_dests.add(dst)
+                if isinstance(dst, list):
+                    for d in dst:
+                        sel_dests.add(d)
+                elif dst:
+                    sel_dests.add(dst)
 
             self.delete_plan = [p for p in all_dests - sel_dests if p.exists() and p.is_file()]
             self.copy_plan   = []
             for idx in self.pg_filament.selected_indices():
                 it = self.pg_filament.items[idx]; dst = self._dest_for_item(it, targets)
-                if dst: self.copy_plan.append((it["src"], dst))
+                if isinstance(dst, list):
+                    for d in dst:
+                        self.copy_plan.append((it["src"], d))
+                elif dst:
+                    self.copy_plan.append((it["src"], dst))
             for idx in self.pg_process.selected_indices():
                 it = self.pg_process.items[idx];  dst = self._dest_for_item(it, targets)
-                if dst: self.copy_plan.append((it["src"], dst))
+                if isinstance(dst, list):
+                    for d in dst:
+                        self.copy_plan.append((it["src"], d))
+                elif dst:
+                    self.copy_plan.append((it["src"], dst))
 
             self.total_ops = len(self.copy_plan)
             self.pg_install.progress.setMaximum(max(1, self.total_ops))
@@ -833,7 +988,7 @@ def parse_args():
     ap.add_argument('--uninstall', action='store_true', help='Remove files installed by this installer')
     ap.add_argument('--dry-run', action='store_true', help='Only report what would be removed (with --uninstall)')
     ap.add_argument('--check-download', action='store_true', help='Download + validate the profiles ZIP (no install)')
-    ap.add_argument('--base', default=None, help='Override base folder (defaults to %APPDATA%)')
+    ap.add_argument('--base', default=None, help='Override base folder (defaults to %%APPDATA%%)')
     return ap.parse_args()
 
 def check_download_only() -> None:
@@ -873,7 +1028,23 @@ def check_download_only() -> None:
 
 def detect_slicers(base: Path) -> list[str]:
     targets = slicer_targets_from_base(base)
-    return [s for s,cats in targets.items() if any(Path(p).exists() or Path(p).parent.exists() for p in cats.values())]
+    detected: list[str] = []
+    for s, cats in targets.items():
+        any_exists = False
+        for p in cats.values():
+            if isinstance(p, list):
+                for pp in p:
+                    if pp.exists() or pp.parent.exists():
+                        any_exists = True
+                        break
+            else:
+                if Path(p).exists() or Path(p).parent.exists():
+                    any_exists = True
+            if any_exists:
+                break
+        if any_exists:
+            detected.append(s)
+    return detected
 
 def headless_install(selected_slicers: list[str], base: Path):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -897,7 +1068,12 @@ def headless_install(selected_slicers: list[str], base: Path):
     for it in fil + proc:
         cat = it.get("category", "filament")
         base_path = targets.get(it["slicer"], {}).get(cat)
-        if base_path:
+        if not base_path:
+            continue
+        if isinstance(base_path, list):
+            for bp in base_path:
+                plan.append((it["src"], bp / it["src"].name))
+        else:
             plan.append((it["src"], base_path / it["src"].name))
     logging.info(f"Copy plan: {len(plan)} files")
     added = []

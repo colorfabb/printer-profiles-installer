@@ -6,6 +6,18 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.11] - 2025-12-18
+### Changed
+- BambuStudio: stricter account detection — only install/remove in numeric `%APPDATA%\\BambuStudio\\user\\<id>` folders; use `user\\default` only when no numeric folders exist.
+
+## [1.6.10] - 2025-12-18
+### Changed
+- BambuStudio: if multiple per-account folders exist under `%APPDATA%\BambuStudio\user\<id>`, install/remove profiles in all detected folders (supports multiple active accounts).
+
+## [1.6.9] - 2025-12-18
+### Fixed
+- BambuStudio: detect per-account numeric folder under `%APPDATA%\BambuStudio\user\<id>` and install profiles into the active folder instead of always using `user\default`.
+
 ## [1.6.8] - 2025-12-16
 ### Changed
 - CI signing: releases no longer fail if the certificate chain is not trusted on the runner (still requires the EXE to be signed).
