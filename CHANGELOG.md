@@ -6,8 +6,14 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
-## [1.6.11] - 2025-12-18
+## [1.6.11] - 2025-12-23
+### Added
+- macOS DMG release support: GitHub Actions now automatically builds and releases DMG installers alongside Windows EXE.
+- Version probe script (`_version_probe.py`) for automated version extraction during CI builds.
+
 ### Changed
+- GitHub Actions workflow now builds for both Windows and macOS platforms.
+- Release artifacts include both `.exe` (Windows) and `.dmg` (macOS) with SHA256 checksums.
 - BambuStudio: stricter account detection — only install/remove in numeric `%APPDATA%\\BambuStudio\\user\\<id>` folders; use `user\\default` only when no numeric folders exist.
 
 ## [1.6.10] - 2025-12-18
