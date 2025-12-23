@@ -24,3 +24,6 @@ tools/upx.zip
 # Windows
 Thumbs.db
 Desktop.ini
+
+# macOSß
+.DS_Store
