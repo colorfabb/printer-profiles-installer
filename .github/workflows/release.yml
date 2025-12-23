@@ -159,11 +159,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download build artifacts
+      - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
+          name: windows-dist
           path: dist-artifacts
-          merge-multiple: true
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dist
+          path: dist-artifacts
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
