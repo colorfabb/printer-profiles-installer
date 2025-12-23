@@ -15,9 +15,6 @@ _pyinstaller_version_info.txt
 tools/upx/
 tools/upx.zip
 
-# Temporary/debug helpers
-_version_probe.py
-
 # Logs/temp
 *.log
 
