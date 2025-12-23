@@ -2,6 +2,8 @@
 
 This repo builds a Windows **single-file** installer EXE (PyInstaller onefile).
 
+macOS builds are also supported, but must be built on macOS (PyInstaller does not cross-build macOS from Windows).
+
 ## Build (local)
 
 ```powershell
@@ -63,6 +65,8 @@ git push origin v1.6.3
 The GitHub Actions workflow builds and uploads:
 - `dist\colorFabbInstaller_vX.Y.Z.exe`
 - `dist\colorFabbInstaller_vX.Y.Z.sha256.txt`
+- `dist/colorFabbInstaller_vX.Y.Z.dmg`
+- `dist/colorFabbInstaller_vX.Y.Z.dmg.sha256.txt`
 
 ## Code signing
 
@@ -97,3 +101,50 @@ $sha = Get-Content .\colorFabbInstaller_vX.Y.Z.sha256.txt
 $local = (Get-FileHash -Algorithm SHA256 .\colorFabbInstaller_vX.Y.Z.exe).Hash.ToLowerInvariant()
 $sha -match $local
 ```
+
+## macOS build (.app) + DMG
+
+### Important limitation
+
+- You must build the macOS `.app` on a macOS machine (local Mac or a CI runner like GitHub Actions `macos-*`).
+
+### Build the .app
+
+On macOS:
+
+```bash
+./build-macos.sh
+```
+
+This runs the existing PyInstaller spec and outputs a `.app` under `dist/`.
+
+### Create a .dmg
+
+On macOS:
+
+```bash
+APP="dist/colorFabbInstaller_vX.Y.Z.app"
+STAGING="dist/dmg-staging"
+
+rm -rf "$STAGING"
+mkdir -p "$STAGING"
+
+cp -R "$APP" "$STAGING/"
+ln -sf /Applications "$STAGING/Applications"
+
+hdiutil create \
+	-volname "colorFabb Filament Installer" \
+	-srcfolder "$STAGING" \
+	-ov -format UDZO \
+	"dist/colorFabbInstaller_vX.Y.Z.dmg"
+```
+
+### Signing / notarization (recommended for real users)
+
+Unsigned macOS apps will typically show Gatekeeper warnings.
+
+- Code-sign the `.app` with a **Developer ID Application** certificate (`codesign`)
+- Notarize the distribution (`xcrun notarytool submit ... --wait`)
+- Staple the ticket (`xcrun stapler staple ...`)
+
+Exact signing/notarization details depend on how you store credentials (local keychain vs CI).

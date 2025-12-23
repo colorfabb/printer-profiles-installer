@@ -3,6 +3,7 @@
 import ast
 import os
 import re
+import sys
 from pathlib import Path
 
 from PyInstaller.config import CONF
@@ -37,6 +38,9 @@ def _read_app_version() -> str:
 APP_VERSION = _read_app_version()
 EXE_NAME = f'colorFabbInstaller_v{APP_VERSION}'
 
+IS_WINDOWS = sys.platform.startswith('win')
+IS_MACOS = sys.platform == 'darwin'
+
 
 def _version_tuple(ver: str) -> tuple[int, int, int, int]:
     parts = [p for p in re.split(r'[^0-9]+', ver) if p]
@@ -49,10 +53,12 @@ def _version_tuple(ver: str) -> tuple[int, int, int, int]:
 _fv = _version_tuple(APP_VERSION)
 _pv = _fv
 
-# Generate a Windows version resource file so Explorer shows File/Product version.
-_version_file = SPEC_DIR / '_pyinstaller_version_info.txt'
-_version_file.write_text(
-        """# UTF-8
+_version_file = None
+if IS_WINDOWS:
+    # Generate a Windows version resource file so Explorer shows File/Product version.
+    _version_file = SPEC_DIR / '_pyinstaller_version_info.txt'
+    _version_file.write_text(
+            """# UTF-8
 VSVersionInfo(
     ffi=FixedFileInfo(
         filevers=%(filevers)s,
@@ -86,15 +92,15 @@ VSVersionInfo(
     ]
 )
 """
-        % {
-                'filevers': repr(_fv),
-                'prodvers': repr(_pv),
-                'ver': APP_VERSION,
-                'exe': EXE_NAME,
-            'copyright': 'Copyright (c) colorFabb B.V.',
-        },
-        encoding='utf-8',
-)
+            % {
+                    'filevers': repr(_fv),
+                    'prodvers': repr(_pv),
+                    'ver': APP_VERSION,
+                    'exe': EXE_NAME,
+                'copyright': 'Copyright (c) colorFabb B.V.',
+            },
+            encoding='utf-8',
+    )
 
 # Optional: point PyInstaller to UPX without needing it on PATH.
 # Usage:  $env:UPX_DIR = 'C:\\Tools\\upx'
@@ -216,7 +222,8 @@ _remove_prefixes = tuple(_remove_prefixes)
 
 def _keep_binary(entry):
     dest = entry[0]
-    return not any(dest.startswith(p) for p in _remove_prefixes)
+    dest_norm = dest.replace('\\', '/')
+    return not any(dest_norm.startswith(p.replace('\\', '/')) for p in _remove_prefixes)
 
 a.binaries = [b for b in a.binaries if _keep_binary(b)]
 pyz = PYZ(a.pure)
@@ -228,7 +235,7 @@ exe = EXE(
     a.datas,
     [],
     name=EXE_NAME,
-    version=str(_version_file),
+    version=str(_version_file) if _version_file else None,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -242,3 +249,10 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+if IS_MACOS:
+    app = BUNDLE(
+        exe,
+        name=f'{EXE_NAME}.app',
+        bundle_identifier='com.colorfabb.filament-installer',
+    )
