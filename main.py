@@ -1262,12 +1262,28 @@ def main():
     setup_logging()
     args = parse_args()
 
+    # If running as a PyInstaller onefile build with splash enabled, make sure it does not linger.
+    try:
+        import pyi_splash  # provided by PyInstaller at runtime
+        if getattr(pyi_splash, 'is_alive', lambda: False)():
+            try:
+                pyi_splash.update_text("Loading installer...")
+            except Exception:
+                pass
+    except Exception:
+        pyi_splash = None  # type: ignore
+
     base = Path(args.base) if args.base else appdata_base()
     TEMP_ROOT.mkdir(parents=True, exist_ok=True)
 
     if args.uninstall:
         deleted, total = uninstall_installed_files(dry_run=args.dry_run)
         logging.info(f"Uninstall complete: deleted {deleted}/{total}")
+        try:
+            if pyi_splash and pyi_splash.is_alive():
+                pyi_splash.close()
+        except Exception:
+            pass
         return
 
     if args.check_download:
@@ -1280,6 +1296,11 @@ def main():
                     QMessageBox.information(None, APP_DISPLAY_NAME, "Download check OK. Profiles ZIP downloaded and validated.")
                 except Exception:
                     pass
+            try:
+                if pyi_splash and pyi_splash.is_alive():
+                    pyi_splash.close()
+            except Exception:
+                pass
             return
         except Exception as e:
             logging.error(f"Download check failed: {e}")
@@ -1297,6 +1318,11 @@ def main():
             selected = ["PrusaSlicer","OrcaSlicer","BambuStudio"]
         logging.info(f"Silent mode: slicers={selected}; base={base}")
         headless_install(selected_slicers=selected, base=base)
+        try:
+            if pyi_splash and pyi_splash.is_alive():
+                pyi_splash.close()
+        except Exception:
+            pass
         return
 
     if not GUI_ENABLED:
@@ -1318,6 +1344,11 @@ def main():
 
     w = InstallerWindow()
     w.show()
+    try:
+        if pyi_splash and pyi_splash.is_alive():
+            QTimer.singleShot(0, pyi_splash.close)
+    except Exception:
+        pass
     sys.exit(app.exec())
 
 if __name__ == "__main__":

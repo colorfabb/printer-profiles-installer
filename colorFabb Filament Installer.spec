@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import ast
+import binascii
 import os
 import re
 import sys
+import struct
+import zlib
 from pathlib import Path
 
 from PyInstaller.config import CONF
+from PyInstaller.building.splash import Splash
 
 
 SPEC_DIR = Path(globals().get('SPECPATH') or Path.cwd())
@@ -226,14 +230,117 @@ def _keep_binary(entry):
     return not any(dest_norm.startswith(p.replace('\\', '/')) for p in _remove_prefixes)
 
 a.binaries = [b for b in a.binaries if _keep_binary(b)]
+
+# Bootloader splash screen (shows immediately during onefile startup/unpacking).
+# Note: PyInstaller splash uses Tcl/Tk under the hood, which can increase bundle size,
+# but it provides immediate user feedback on slow-starting onefile apps.
+def _write_plain_png_splash(path: Path, *, width: int = 600, height: int = 240) -> None:
+    # Keep within PyInstaller's default max splash size (760x480).
+    # Plain white background; PyInstaller will render its default progress text/bar.
+    def _chunk(tag: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(data))
+            + tag
+            + data
+            + struct.pack('>I', binascii.crc32(tag + data) & 0xFFFFFFFF)
+        )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    signature = b'\x89PNG\r\n\x1a\n'
+    ihdr = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)  # 8-bit RGB
+
+    # Build RGB pixel buffer so we can draw a simple label without Pillow.
+    pixels = bytearray(b'\xFF' * (width * height * 3))  # white background
+
+    FONT_5x7 = {
+        'A': ["01110","10001","10001","11111","10001","10001","10001"],
+        'D': ["11110","10001","10001","10001","10001","10001","11110"],
+        'E': ["11111","10000","10000","11110","10000","10000","11111"],
+        'G': ["01111","10000","10000","10111","10001","10001","01110"],
+        'I': ["11111","00100","00100","00100","00100","00100","11111"],
+        'L': ["10000","10000","10000","10000","10000","10000","11111"],
+        'N': ["10001","11001","10101","10011","10001","10001","10001"],
+        'O': ["01110","10001","10001","10001","10001","10001","01110"],
+        'R': ["11110","10001","10001","11110","10100","10010","10001"],
+        'S': ["01111","10000","10000","01110","00001","00001","11110"],
+        'T': ["11111","00100","00100","00100","00100","00100","00100"],
+        '.': ["00000","00000","00000","00000","00000","00100","00100"],
+        ' ': ["00000","00000","00000","00000","00000","00000","00000"],
+    }
+
+    def _set_px(x: int, y: int, r: int, g: int, b: int) -> None:
+        if 0 <= x < width and 0 <= y < height:
+            idx = (y * width + x) * 3
+            pixels[idx:idx+3] = bytes((r, g, b))
+
+    def _draw_text(x0: int, y0: int, text: str, *, scale: int = 4) -> None:
+        x = x0
+        for ch in text:
+            glyph = FONT_5x7.get(ch, FONT_5x7[' '])
+            for gy, row_bits in enumerate(glyph):
+                for gx, bit in enumerate(row_bits):
+                    if bit == '1':
+                        for sy in range(scale):
+                            for sx in range(scale):
+                                _set_px(x + gx * scale + sx, y0 + gy * scale + sy, 0, 0, 0)
+            x += (5 + 1) * scale  # glyph width + spacing
+
+    label = "LOADING INSTALLER..."
+    scale = 4
+    label_w = len(label) * (5 + 1) * scale
+    label_h = 7 * scale
+    start_x = max(0, (width - label_w) // 2)
+    start_y = max(0, (height - label_h) // 2)
+    _draw_text(start_x, start_y, label, scale=scale)
+
+    # PNG scanlines: each row is prefixed with filter byte 0 (None)
+    raw_rows = []
+    for y in range(height):
+        raw_rows.append(b'\x00' + bytes(pixels[y * width * 3:(y + 1) * width * 3]))
+    raw = b''.join(raw_rows)
+    idat = zlib.compress(raw, level=9)
+
+    png = signature + _chunk(b'IHDR', ihdr) + _chunk(b'IDAT', idat) + _chunk(b'IEND', b'')
+    path.write_bytes(png)
+
+_splash_candidates = [
+    # Preferred: provide a dedicated small splash asset if desired.
+    SPEC_DIR / 'Logo' / 'splash.png',
+    SPEC_DIR / 'logo' / 'splash.png',
+]
+
+_splash_image = next((p for p in _splash_candidates if p.is_file()), None)
+if _splash_image is None:
+    _splash_image = SPEC_DIR / 'build' / '_cf_splash.png'
+    _write_plain_png_splash(_splash_image)
+
+# NOTE: PyInstaller splash is not supported on macOS.
+splash = None
+if not IS_MACOS and _splash_image is not None:
+    splash = Splash(
+        str(_splash_image),
+        binaries=a.binaries,
+        datas=a.datas,
+        # Do NOT enable text support; otherwise the bootloader shows extraction filenames.
+    )
+
 pyz = PYZ(a.pure)
 
+_exe_args = [pyz]
+if splash is not None:
+    # Splash must be passed as a positional argument so it becomes a 'SPLASH' entry in the PKG TOC.
+    _exe_args.append(splash)
+
+_exe_args.extend([a.scripts, a.binaries, a.datas])
+
+if splash is not None:
+    # Also pass splash's Tcl/Tk runtime dependencies.
+    _exe_args.append(splash.binaries)
+
+_exe_args.append([])
+
 exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
+    *_exe_args,
     name=EXE_NAME,
     version=str(_version_file) if _version_file else None,
     debug=False,
