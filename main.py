@@ -3,17 +3,24 @@ from __future__ import annotations
 # main.py (full, updated: full yellow Step 0 + improved list visibility + yellow taskbar icon + robust Select/Deselect All + delete deselected + logging/signal fixes)
 # colorFabb Filament Installer — 2026 look & feel
 
-import sys, os, zipfile, shutil, hashlib, argparse, logging, tempfile
+import sys, os, zipfile, shutil, hashlib, argparse, logging, tempfile, ssl
 from pathlib import Path
 from urllib.request import urlopen, Request
 
+# Try to import certifi for better SSL certificate handling
+try:
+    import certifi
+    CERTIFI_AVAILABLE = True
+except ImportError:
+    CERTIFI_AVAILABLE = False
+
 GUI_ENABLED = True
 try:
-    from PySide6.QtCore import Qt, QThread, Signal, QSize
+    from PySide6.QtCore import Qt, QThread, Signal, QSize, QTimer
     from PySide6.QtWidgets import (
         QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
         QListWidget, QListWidgetItem, QProgressBar, QStackedWidget, QCheckBox,
-        QMessageBox, QFileDialog, QLineEdit
+        QMessageBox, QFileDialog, QLineEdit, QDialog, QTextEdit, QDialogButtonBox
     )
     from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
 except Exception:
@@ -49,13 +56,50 @@ except Exception:
     QMessageBox = object
     QFileDialog = object
     QLineEdit = object
+    QDialog = object
+    QTextEdit = object
+    QDialogButtonBox = object
     QIcon = object
     QPixmap = object
     QPainter = object
     QColor = object
 
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.11"
+VERSION = "1.6.17"
+
+DISCLAIMER_TEXT = """colorFabb Profile Installer – Disclaimer / Important Information (Free Tool)
+
+This free installer downloads and installs 3D printing profiles ("Profiles") maintained by colorFabb from a public GitHub repository and copies them into configuration folders used by the following third-party slicing applications:
+
+• PrusaSlicer
+• OrcaSlicer
+• Bambu Studio
+
+By continuing, you acknowledge and agree that:
+
+Third-party software
+PrusaSlicer, OrcaSlicer, and Bambu Studio are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
+
+Overwriting existing files
+The installer may create, modify, or overwrite profile files in the target slicer's configuration directories. If a profile file with the same filename already exists, it may be replaced. You are responsible for backing up your existing profiles and settings before proceeding.
+
+System changes
+The installer writes files into user-level application data folders (such as Windows AppData or macOS Application Support) used by your slicers. These changes may affect slicer behavior, available presets, and print results.
+
+Use at your own risk
+Profiles are provided "AS IS" and may not be suitable for your printer, firmware, hardware setup, material batch, environment, or intended use. Incorrect settings may cause failed prints, reduced quality, excessive wear, or equipment damage. Always review profile settings and perform a test print before production use.
+
+No warranties
+To the maximum extent permitted by law, colorFabb disclaims all warranties, express or implied, including merchantability, fitness for a particular purpose, and non-infringement.
+
+Limitation of liability
+To the maximum extent permitted by law, colorFabb is not liable for any direct, indirect, incidental, special, consequential, or exemplary damages, including loss of data, loss of profits, business interruption, hardware damage, or any other loss arising out of or related to the use of this installer or the Profiles, even if advised of the possibility of such damages.
+
+Network and source availability
+Installation requires internet access to download content from GitHub. colorFabb does not guarantee availability, integrity, or continued access to remote resources, and installation may fail or be incomplete due to network conditions or repository changes.
+
+If you do not agree, cancel the installation.
+"""
 
 GITHUB_ZIP_URL = "https://github.com/colorfabb/printer-profiles/archive/refs/heads/main.zip"
 EXPECTED_SHA256 = None
@@ -259,15 +303,31 @@ class ZipDownloader(QThread):
     progress    = Signal(int, int)
     finished_ok = Signal(Path, str)  # zip_path, sha256
     failed      = Signal(str)
-    def __init__(self, url: str, dest_zip: Path):
+    ssl_error   = Signal(str)  # Special signal for SSL errors
+    def __init__(self, url: str, dest_zip: Path, verify_ssl: bool = True):
         super().__init__()
         self.url = url
         self.dest_zip = dest_zip
+        self.verify_ssl = verify_ssl
     def run(self):
         try:
             ensure_dir(self.dest_zip.parent)
             req = Request(self.url, headers={"User-Agent":"colorFabb-Installer"})
-            with urlopen(req) as r:
+            
+            # Create SSL context
+            ssl_context = None
+            if self.verify_ssl:
+                if CERTIFI_AVAILABLE:
+                    # Use certifi's CA bundle if available
+                    ssl_context = ssl.create_default_context(cafile=certifi.where())
+                else:
+                    # Use default context
+                    ssl_context = ssl.create_default_context()
+            else:
+                # Disable SSL verification (only when explicitly requested by user)
+                ssl_context = ssl._create_unverified_context()
+            
+            with urlopen(req, context=ssl_context) as r:
                 total = int(r.headers.get("Content-Length", "0")) if r.headers.get("Content-Length") else 0
                 downloaded = 0
                 chunk = 8192
@@ -282,7 +342,12 @@ class ZipDownloader(QThread):
                 z.testzip()
             self.finished_ok.emit(self.dest_zip, sha256_file(self.dest_zip))
         except Exception as e:
-            self.failed.emit(str(e))
+            error_str = str(e)
+            # Check if it's an SSL certificate error
+            if "CERTIFICATE_VERIFY_FAILED" in error_str or "certificate verify failed" in error_str.lower():
+                self.ssl_error.emit(error_str)
+            else:
+                self.failed.emit(error_str)
 
 # ========= EXTRACT & PARSE REPO =========
 def extract_zip(zip_path: Path, dest_dir: Path):
@@ -365,23 +430,29 @@ def uninstall_installed_files(dry_run: bool = False) -> tuple[int, int]:
 APP_QSS = """
 * { font-family: 'Segoe UI', 'Inter', 'Calibri', 'Arial'; font-size: 12.5pt; }
 QWidget { background: #FAFBFE; color: #121212; }
-QPushButton { background: #111; color: #fff; border: 0; padding: 10px 18px; border-radius: 10px; }
-QPushButton:hover { background: #222; }
-QPushButton:disabled { background: #AAB0B7; color: #fff; }
+QPushButton { background: #111; color: #fff; border: 0; padding: 10px 18px; border-radius: 10px; font-weight: 500; }
+QPushButton:hover { background: #222; color: #fff; }
+QPushButton:disabled { background: #D0D3D9; color: #888; }
 QLineEdit { background: #fff; border: 1px solid #E3E5EA; border-radius: 8px; padding: 8px 10px; }
 QListWidget { background: #fff; border: 1px solid #E3E5EA; border-radius: 10px; }
-QListWidget::item { padding: 6px; }
+QListWidget::item { padding: 8px; }
 QListWidget::item:hover { background: #FFF6CC; }
-QListWidget::item:selected { background: #FFE27A; color: #111; }  /* duidelijk geselecteerd */
+QListWidget::item:selected { background: #FFE27A; color: #111; }
+QListWidget::indicator { width: 24px; height: 24px; border: 2px solid #333; border-radius: 3px; background: #fff; margin-right: 6px; }
+QListWidget::indicator:hover { border-color: #FFC400; background: #FFF9E6; }
+QListWidget::indicator:checked { background: #FFC400; border: 2px solid #333; }
 QProgressBar { border: 1px solid #E3E5EA; border-radius: 10px; background: #fff; text-align: center; height: 16px; }
 QProgressBar::chunk { background: #FFC400; border-radius: 10px; }
-QCheckBox { spacing: 8px; }
+QCheckBox { spacing: 12px; font-size: 13pt; color: #111; }
+QCheckBox::indicator { width: 26px; height: 26px; border: 3px solid #111; border-radius: 4px; background: #fff; }
+QCheckBox::indicator:hover { border-color: #FFC400; background: #FFF9E6; }
+QCheckBox::indicator:checked { background: #FFC400; border: 3px solid #111; }
 """
 WELCOME_QSS = """
 * { font-family: 'Segoe UI', 'Inter', 'Calibri', 'Arial'; font-size: 12.5pt; }
 QWidget { background: #FFC400; color: #111; }
-QPushButton { background: #111; color: #fff; border: 0; padding: 10px 18px; border-radius: 10px; }
-QPushButton:hover { background: #222; }
+QPushButton { background: #111; color: #fff; border: 0; padding: 10px 18px; border-radius: 10px; font-weight: 500; }
+QPushButton:hover { background: #222; color: #fff; }
 QPushButton:disabled { background: #AAB0B7; color: #fff; }
 QLineEdit { background: #fff; border: 1px solid #E3E5EA; border-radius: 8px; padding: 8px 10px; }
 QListWidget { background: #fff; border: 1px solid #E3E5EA; border-radius: 10px; }
@@ -389,14 +460,63 @@ QListWidget::item { padding: 6px; }
 QListWidget::item:selected { background: #FFE27A; color: #111; }
 QProgressBar { border: 1px solid #E3E5EA; border-radius: 10px; background: #fff; text-align: center; height: 16px; }
 QProgressBar::chunk { background: #111; border-radius: 10px; }
+QCheckBox { spacing: 12px; font-size: 14pt; font-weight: 700; color: #111; }
+QCheckBox::indicator { width: 28px; height: 28px; border: 3px solid #111; border-radius: 4px; background: #fff; }
+QCheckBox::indicator:hover { border-color: #000; background: #FFF6CC; }
+QCheckBox::indicator:checked { background: #111; border: 3px solid #111; }
 """
 HEADER_QSS = "background:#FFC400; padding:14px; border:0; border-bottom:1px solid #e6e6e6;"
+
+# Create checkmark icon for checked state
+def create_checkmark_icon(size: int = 24, color: str = "#fff") -> QIcon:
+    """Create a checkmark icon for checkbox checked state."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    
+    # Draw checkmark
+    pen = painter.pen()
+    pen.setColor(QColor(color))
+    pen.setWidth(max(2, size // 12))
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    painter.setPen(pen)
+    
+    # Checkmark path (scaled to icon size)
+    scale = size / 24.0
+    x1, y1 = int(6 * scale), int(12 * scale)
+    x2, y2 = int(10 * scale), int(16 * scale)
+    x3, y3 = int(18 * scale), int(8 * scale)
+    
+    painter.drawLine(x1, y1, x2, y2)
+    painter.drawLine(x2, y2, x3, y3)
+    painter.end()
+    
+    return QIcon(pixmap)
 
 # ========= GUI =========
 if GUI_ENABLED:
 
+    class DisclaimerDialog(QDialog):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setWindowTitle("Disclaimer / Important Information")
+            self.setMinimumSize(QSize(780, 520))
+
+            root = QVBoxLayout(self)
+            text = QTextEdit()
+            text.setReadOnly(True)
+            text.setPlainText(DISCLAIMER_TEXT)
+            root.addWidget(text, 1)
+
+            buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+            buttons.accepted.connect(self.accept)
+            root.addWidget(buttons, 0)
+
     class PageWelcome(QWidget):
         next_requested = Signal()
+        acceptance_changed = Signal()
         def __init__(self):
             super().__init__()
             self.logo_path = find_logo()
@@ -419,6 +539,34 @@ if GUI_ENABLED:
             root.addWidget(title, 0, Qt.AlignLeft)
             root.addWidget(subtitle, 0, Qt.AlignLeft)
             root.addStretch(2)
+
+            actions = QHBoxLayout()
+            self.btn_disclaimer = QPushButton("Disclaimer")
+            self.btn_disclaimer.clicked.connect(self.show_disclaimer)
+
+            actions.addWidget(self.btn_disclaimer)
+            actions.addStretch(1)
+            root.addLayout(actions)
+
+            self.accept_checkbox = QCheckBox("I have read and understand the above, including the overwrite warning, and I want to continue")
+            self.accept_checkbox.setStyleSheet("QCheckBox { font-size: 14pt; font-weight: 700; color: #111; spacing: 14px; } QCheckBox::indicator { width: 28px; height: 28px; border: 3px solid #111; border-radius: 5px; background: #fff; } QCheckBox::indicator:hover { border-color: #000; background: #FFF6CC; box-shadow: 0 0 8px rgba(0,0,0,0.2); } QCheckBox::indicator:checked { background: #111; border-color: #111; }")
+            self.accept_checkbox.stateChanged.connect(lambda *_: self.acceptance_changed.emit())
+            root.addWidget(self.accept_checkbox)
+
+            overwrite = QLabel("Warning: This installer may overwrite existing profile files. Back up your slicer profiles/settings before proceeding.")
+            overwrite.setStyleSheet("color:#111; font-size:11.5pt;")
+            overwrite.setWordWrap(True)
+            root.addWidget(overwrite)
+
+        def accepted(self) -> bool:
+            try:
+                return self.accept_checkbox.checkState() == Qt.Checked
+            except Exception:
+                return False
+
+        def show_disclaimer(self):
+            dlg = DisclaimerDialog(self)
+            dlg.exec()
 
         def resizeEvent(self, e):
             if self.logo_path:
@@ -608,8 +756,8 @@ if GUI_ENABLED:
                 self.list.addItem(li)
             self.list.blockSignals(False)
             self.loaded = True
-            # Start: alles geselecteerd → label wordt "Deselect All"
-            self.refresh_select_all_label()
+            # Update select all status after loading
+            QTimer.singleShot(0, self.refresh_select_all_label)
             self.info.setText(f"Loaded {self.list.count()} filament profiles.")
             self.selection_changed.emit()
 
@@ -675,7 +823,8 @@ if GUI_ENABLED:
                 self.list.addItem(li)
             self.list.blockSignals(False)
             self.loaded = True
-            self.refresh_select_all_label()
+            # Update select all status after loading
+            QTimer.singleShot(0, self.refresh_select_all_label)
             self.info.setText(f"Loaded {self.list.count()} print/process profiles.")
             self.selection_changed.emit()
 
@@ -754,6 +903,7 @@ if GUI_ENABLED:
             self.pg_slicers.base_changed.connect(self.update_nav)
             self.pg_filament.selection_changed.connect(self.update_nav)
             self.pg_process.selection_changed.connect(self.update_nav)
+            self.pg_welcome.acceptance_changed.connect(self.update_nav)
             # Install is triggered via the shared bottom-right navigation button.
 
             self.repo_filament_all = []
@@ -780,7 +930,7 @@ if GUI_ENABLED:
             self.btn_back.setEnabled(idx > 0)
             if idx == 0:
                 self.btn_next.setText("Get started")
-                self.btn_next.setEnabled(True)
+                self.btn_next.setEnabled(self.pg_welcome.accepted())
             elif idx == 1:
                 self.btn_next.setText("Next →")
                 self.btn_next.setEnabled(len(self.pg_slicers.selected_slicers()) > 0)
@@ -822,15 +972,16 @@ if GUI_ENABLED:
             self.update_nav()
 
         # DOWNLOAD
-        def download_profiles(self):
+        def download_profiles(self, verify_ssl: bool = True):
             try:
                 CACHE_DIR.mkdir(parents=True, exist_ok=True)
                 self.pg_filament.btn_load.setEnabled(False)
                 self.pg_filament.info.setText("Downloading profiles ZIP from GitHub...")
-                self.downloader = ZipDownloader(GITHUB_ZIP_URL, self.zip_path)
+                self.downloader = ZipDownloader(GITHUB_ZIP_URL, self.zip_path, verify_ssl=verify_ssl)
                 self.downloader.progress.connect(self.on_download_progress)
                 self.downloader.finished_ok.connect(self.on_download_done)
                 self.downloader.failed.connect(self.on_download_failed)
+                self.downloader.ssl_error.connect(self.on_ssl_error)
                 self.downloader.start()
             except Exception as e:
                 QMessageBox.critical(self, "Download error", str(e))
@@ -866,6 +1017,27 @@ if GUI_ENABLED:
             QMessageBox.critical(self, "Download failed", msg)
             self.pg_filament.btn_load.setEnabled(True)
             self.update_nav()
+
+        def on_ssl_error(self, msg: str):
+            """Handle SSL certificate errors with user-friendly retry option."""
+            result = QMessageBox.warning(
+                self,
+                "SSL Certificate Error",
+                f"Unable to verify GitHub's SSL certificate. This can happen on systems with outdated certificate stores.\n\n"
+                f"Error details: {msg}\n\n"
+                f"Would you like to retry without SSL verification?\n\n"
+                f"Note: Disabling SSL verification is less secure but safe for downloading from trusted sources like GitHub.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if result == QMessageBox.Yes:
+                # Retry without SSL verification
+                self.download_profiles(verify_ssl=False)
+            else:
+                self.pg_filament.btn_load.setEnabled(True)
+                self.pg_filament.info.setText("Download cancelled. Click 'Load Profiles' to retry.")
+                self.update_nav()
 
         # PLANS
         def _dest_for_item(self, it, targets):
