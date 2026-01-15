@@ -63,6 +63,17 @@ jobs:
             ./build-release.ps1
           }
 
+          # Also publish a stable, versionless filename for direct linking to the latest release.
+          $exe = Get-ChildItem .\dist\colorFabbInstaller_v*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "No EXE found in dist/" }
+
+          $stableExe = Join-Path $exe.DirectoryName "colorFabbInstaller.exe"
+          Copy-Item -Force $exe.FullName $stableExe
+
+          $hash = (Get-FileHash -Algorithm SHA256 $stableExe).Hash.ToLowerInvariant()
+          $shaFile = Join-Path $exe.DirectoryName "colorFabbInstaller.exe.sha256.txt"
+          Set-Content -Path $shaFile -Value ("{0}  {1}" -f $hash, (Split-Path -Leaf $stableExe)) -Encoding ASCII
+
       - name: Verify signature (optional)
         shell: pwsh
         run: |
@@ -141,6 +152,12 @@ jobs:
 
           HASH="$(shasum -a 256 "$DMG_PATH" | awk '{print tolower($1)}')"
           echo "${HASH}  $(basename "$DMG_PATH")" > "dist/${APP_NAME}.dmg.sha256.txt"
+
+          # Also publish a stable, versionless filename for direct linking to the latest release.
+          STABLE_DMG="dist/colorFabbInstaller.dmg"
+          cp -f "$DMG_PATH" "$STABLE_DMG"
+          STABLE_HASH="$(shasum -a 256 "$STABLE_DMG" | awk '{print tolower($1)}')"
+          echo "${STABLE_HASH}  $(basename "$STABLE_DMG")" > "dist/colorFabbInstaller.dmg.sha256.txt"
 
       - name: Upload artifacts (macOS)
         uses: actions/upload-artifact@v4

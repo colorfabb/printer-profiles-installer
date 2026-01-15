@@ -11,7 +11,9 @@ This installer helps you download and install the **official colorFabb printer/s
 
 ## How to use (end users)
 
-1. Download the latest `colorFabbInstaller_vX.Y.Z.exe` from **GitHub Releases**.
+1. Download the latest installer from **GitHub Releases**.
+	- Versioned file: `colorFabbInstaller_vX.Y.Z.exe`
+	- Stable (direct link to latest): `colorFabbInstaller.exe`
 2. Double-click to start.
 3. Follow the steps in the window (select slicer(s) / location(s) if prompted).
 4. Click **Install** and wait until it shows “Done/Completed”.
