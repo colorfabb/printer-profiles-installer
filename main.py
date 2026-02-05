@@ -65,7 +65,7 @@ except Exception:
     QColor = object
 
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.19"
+VERSION = "1.6.20"
 
 DISCLAIMER_TEXT = """colorFabb Profile Installer – Disclaimer / Important Information (Free Tool)
 
@@ -74,11 +74,12 @@ This free installer downloads and installs 3D printing profiles ("Profiles") mai
 • PrusaSlicer
 • OrcaSlicer
 • Bambu Studio
+• AnyCubicSlicer
 
 By continuing, you acknowledge and agree that:
 
 Third-party software
-PrusaSlicer, OrcaSlicer, and Bambu Studio are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
+PrusaSlicer, OrcaSlicer, Bambu Studio, and AnyCubicSlicer are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
 
 Overwriting existing files
 The installer may create, modify, or overwrite profile files in the target slicer's configuration directories. If a profile file with the same filename already exists, it may be replaced. You are responsible for backing up your existing profiles and settings before proceeding.
@@ -192,8 +193,71 @@ def _discover_bambu_user_profile_roots(base: Path) -> list[Path]:
 
     return out if out else [default_root]
 
+def _anycubic_slicer_root_from_base(base: Path) -> Path:
+    """Resolve the AnycubicSlicerNext root folder from a user-provided base path.
+
+    The UI allows browsing any folder, so handle common selections:
+    - %APPDATA% (Roaming)                 -> base/AnycubicSlicerNext
+    - %APPDATA%/AnycubicSlicerNext        -> base
+    - %APPDATA%/AnycubicSlicerNext/user   -> base.parent
+    """
+    try:
+        name = base.name.lower()
+    except Exception:
+        name = ""
+
+    if name == "anycubicslicernext":
+        return base
+    if name == "user" and base.parent.name.lower() == "anycubicslicernext":
+        return base.parent
+    return base / "AnycubicSlicerNext"
+
+def _discover_anycubic_user_profile_roots(base: Path) -> list[Path]:
+    """Discover AnycubicSlicerNext user folders.
+
+    AnycubicSlicerNext creates per-account folders under %APPDATA%\\AnycubicSlicerNext\\user\\<digits>.
+    Multiple accounts can be active, so we return *all* numeric folders, sorted by most recently
+    modified (descending). We fall back to user\\default only if no numeric folders exist.
+    """
+    anycubic_root = _anycubic_slicer_root_from_base(base)
+    user_root = anycubic_root / "user"
+    default_root = user_root / "default"
+
+    if not user_root.exists():
+        return [default_root]
+
+    candidates: list[Path] = []
+    try:
+        for d in user_root.iterdir():
+            if not d.is_dir():
+                continue
+            if d.name.isdigit():
+                candidates.append(d)
+    except Exception:
+        candidates = []
+
+    if not candidates:
+        return [default_root]
+
+    try:
+        candidates = sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    out: list[Path] = []
+    for p in candidates:
+        k = str(p)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(p)
+
+    return out if out else [default_root]
+
 def slicer_targets_from_base(base: Path):
     bambu_user_roots = _discover_bambu_user_profile_roots(base)
+    anycubic_user_roots = _discover_anycubic_user_profile_roots(base)
     return {
         "PrusaSlicer": {
             "filament": base / "PrusaSlicer" / "filament",
@@ -206,6 +270,10 @@ def slicer_targets_from_base(base: Path):
         "BambuStudio": {
             "filament": [p / "filament" for p in bambu_user_roots],
             "process":  [p / "process" for p in bambu_user_roots],
+        },
+        "AnyCubicSlicer": {
+            "filament": [p / "filament" for p in anycubic_user_roots],
+            "process":  [p / "process" for p in anycubic_user_roots],
         },
     }
 
@@ -378,6 +446,12 @@ def collect_repo_profiles_robust(extracted_root: Path):
                 filament_items.append({"slicer":"OrcaSlicer","src":p})
             elif "/process/" in path:
                 process_items.append({"slicer":"OrcaSlicer","src":p,"category":"process"})
+            continue
+        if ("/anycubicslicer/" in path or "/anycubicslicernext/" in path) and ext in JSON_EXTS:
+            if "/filament/" in path:
+                filament_items.append({"slicer":"AnyCubicSlicer","src":p})
+            elif "/process/" in path:
+                process_items.append({"slicer":"AnyCubicSlicer","src":p,"category":"process"})
             continue
         if ("/bambustudio/" in path or "/bambu studio/" in path) and ext in JSON_EXTS:
             if "/filament/" in path:
@@ -611,7 +685,7 @@ if GUI_ENABLED:
             def mk_status_text(files_found: int) -> str:
                 return f"✔ {files_found} profiles detected" if files_found > 0 else "✘ Not detected"
 
-            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio"]:
+            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer"]:
                 row = QHBoxLayout()
                 box = QCheckBox(name)
                 box.stateChanged.connect(lambda *_: self.selection_changed.emit())
@@ -665,7 +739,7 @@ if GUI_ENABLED:
             self.selection_changed.emit()
 
         def update_targets(self):
-            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio"]:
+            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer"]:
                 base = Path(self.path_edits[name].text())
                 self.targets[name] = slicer_targets_from_base(base)[name]
 
@@ -1315,7 +1389,7 @@ def main():
     if args.silent:
         selected = args.slicers or (detect_slicers(base) if args.all or not args.slicers else [])
         if not selected:
-            selected = ["PrusaSlicer","OrcaSlicer","BambuStudio"]
+            selected = ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer"]
         logging.info(f"Silent mode: slicers={selected}; base={base}")
         headless_install(selected_slicers=selected, base=base)
         try:

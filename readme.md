@@ -9,6 +9,14 @@ This installer helps you download and install the **official colorFabb printer/s
 - Validates that the download/ZIP is correct.
 - Installs the profile files into the correct folder(s) for supported slicers.
 
+Supported slicers:
+- PrusaSlicer
+- OrcaSlicer
+- Bambu Studio
+- AnyCubicSlicer (AnycubicSlicerNext)
+
+On Windows, AnyCubicSlicer profiles are copied into all detected per-account folders under `%APPDATA%\AnycubicSlicerNext\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
+
 ## How to use (end users)
 
 1. Download the latest installer from **GitHub Releases**.

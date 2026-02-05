@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.20] - 2026-02-05
+### Added
+- AnyCubicSlicer support: installs filament and process profiles into `%APPDATA%\AnycubicSlicerNext\user\<id>\` (all numeric user folders; falls back to `user\default` if no numeric folders exist).
+
 ## [1.6.11] - 2025-12-23
 ### Added
 - macOS DMG release support: GitHub Actions now automatically builds and releases DMG installers alongside Windows EXE.
