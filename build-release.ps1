@@ -11,6 +11,28 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
+function Stop-RunningInstaller {
+    # The onefile EXE can remain running while testing, which locks dist\*.exe
+    # and makes clean builds fail with "Access is denied".
+    try {
+        $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.ProcessName -like 'colorFabbInstaller_v*' -or $_.ProcessName -like 'colorFabbInstaller*'
+        }
+
+        foreach ($p in $procs) {
+            try {
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            }
+            catch {
+                # Ignore and let cleanup try anyway.
+            }
+        }
+    }
+    catch {
+        # Ignore; best-effort only.
+    }
+}
+
 function Find-SignTool {
     $cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
@@ -32,6 +54,7 @@ function Find-SignTool {
 }
 
 # Build
+Stop-RunningInstaller
 if (Test-Path .\dist) { Remove-Item -Recurse -Force .\dist }
 if (Test-Path .\build) { Remove-Item -Recurse -Force .\build }
 

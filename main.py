@@ -65,7 +65,7 @@ except Exception:
     QColor = object
 
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.20"
+VERSION = "1.6.22"
 
 DISCLAIMER_TEXT = """colorFabb Profile Installer – Disclaimer / Important Information (Free Tool)
 
@@ -75,11 +75,12 @@ This free installer downloads and installs 3D printing profiles ("Profiles") mai
 • OrcaSlicer
 • Bambu Studio
 • AnyCubicSlicer
+• QIDI Studio
 
 By continuing, you acknowledge and agree that:
 
 Third-party software
-PrusaSlicer, OrcaSlicer, Bambu Studio, and AnyCubicSlicer are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
+PrusaSlicer, OrcaSlicer, Bambu Studio, AnyCubicSlicer, and QIDI Studio are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
 
 Overwriting existing files
 The installer may create, modify, or overwrite profile files in the target slicer's configuration directories. If a profile file with the same filename already exists, it may be replaced. You are responsible for backing up your existing profiles and settings before proceeding.
@@ -255,9 +256,72 @@ def _discover_anycubic_user_profile_roots(base: Path) -> list[Path]:
 
     return out if out else [default_root]
 
+def _qidi_studio_root_from_base(base: Path) -> Path:
+    """Resolve the QIDIStudio root folder from a user-provided base path.
+
+    The UI allows browsing any folder, so handle common selections:
+    - %APPDATA% (Roaming)          -> base/QIDIStudio
+    - %APPDATA%/QIDIStudio         -> base
+    - %APPDATA%/QIDIStudio/user    -> base.parent
+    """
+    try:
+        name = base.name.lower()
+    except Exception:
+        name = ""
+
+    if name == "qidistudio":
+        return base
+    if name == "user" and base.parent.name.lower() == "qidistudio":
+        return base.parent
+    return base / "QIDIStudio"
+
+def _discover_qidi_user_profile_roots(base: Path) -> list[Path]:
+    """Discover QIDIStudio user folders.
+
+    QIDIStudio creates per-account folders under %APPDATA%\\QIDIStudio\\user\\<digits>.
+    Multiple accounts can be active, so we return *all* numeric folders, sorted by most recently
+    modified (descending). We fall back to user\\default only if no numeric folders exist.
+    """
+    qidi_root = _qidi_studio_root_from_base(base)
+    user_root = qidi_root / "user"
+    default_root = user_root / "default"
+
+    if not user_root.exists():
+        return [default_root]
+
+    candidates: list[Path] = []
+    try:
+        for d in user_root.iterdir():
+            if not d.is_dir():
+                continue
+            if d.name.isdigit():
+                candidates.append(d)
+    except Exception:
+        candidates = []
+
+    if not candidates:
+        return [default_root]
+
+    try:
+        candidates = sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    out: list[Path] = []
+    for p in candidates:
+        k = str(p)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(p)
+
+    return out if out else [default_root]
+
 def slicer_targets_from_base(base: Path):
     bambu_user_roots = _discover_bambu_user_profile_roots(base)
     anycubic_user_roots = _discover_anycubic_user_profile_roots(base)
+    qidi_user_roots = _discover_qidi_user_profile_roots(base)
     return {
         "PrusaSlicer": {
             "filament": base / "PrusaSlicer" / "filament",
@@ -274,6 +338,10 @@ def slicer_targets_from_base(base: Path):
         "AnyCubicSlicer": {
             "filament": [p / "filament" for p in anycubic_user_roots],
             "process":  [p / "process" for p in anycubic_user_roots],
+        },
+        "QIDIStudio": {
+            "filament": [p / "filament" for p in qidi_user_roots],
+            "process":  [p / "process" for p in qidi_user_roots],
         },
     }
 
@@ -458,6 +526,12 @@ def collect_repo_profiles_robust(extracted_root: Path):
                 filament_items.append({"slicer":"BambuStudio","src":p})
             elif "/process/" in path:
                 process_items.append({"slicer":"BambuStudio","src":p,"category":"process"})
+            continue
+        if ("/qidistudio/" in path or "/qidi studio/" in path) and ext in JSON_EXTS:
+            if "/filament/" in path:
+                filament_items.append({"slicer":"QIDIStudio","src":p})
+            elif "/process/" in path:
+                process_items.append({"slicer":"QIDIStudio","src":p,"category":"process"})
             continue
     return filament_items, process_items
 
@@ -685,9 +759,10 @@ if GUI_ENABLED:
             def mk_status_text(files_found: int) -> str:
                 return f"✔ {files_found} profiles detected" if files_found > 0 else "✘ Not detected"
 
-            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer"]:
+            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer","QIDIStudio"]:
                 row = QHBoxLayout()
-                box = QCheckBox(name)
+                label = "QIDI Studio" if name == "QIDIStudio" else name
+                box = QCheckBox(label)
                 box.stateChanged.connect(lambda *_: self.selection_changed.emit())
                 box.toggled.connect(lambda *_: self.selection_changed.emit())
                 self.checks[name] = box
@@ -739,7 +814,7 @@ if GUI_ENABLED:
             self.selection_changed.emit()
 
         def update_targets(self):
-            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer"]:
+            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer","QIDIStudio"]:
                 base = Path(self.path_edits[name].text())
                 self.targets[name] = slicer_targets_from_base(base)[name]
 
@@ -1001,7 +1076,8 @@ if GUI_ENABLED:
         def update_nav(self):
             self.apply_theme()
             idx = self.stack.currentIndex()
-            self.btn_back.setEnabled(idx > 0)
+            # Back navigation makes sense only within the wizard, not after completion.
+            self.btn_back.setEnabled(0 < idx < 5)
             if idx == 0:
                 self.btn_next.setText("Get started")
                 self.btn_next.setEnabled(self.pg_welcome.accepted())
@@ -1039,6 +1115,10 @@ if GUI_ENABLED:
             elif i == 3:
                 self.prepare_copy_and_delete_plans()
                 self.stack.setCurrentIndex(4)
+                self.update_nav()
+                QApplication.processEvents()
+                self.install_selected()
+                return
             elif i == 4:
                 self.install_selected()
             else:
@@ -1219,11 +1299,12 @@ if GUI_ENABLED:
                     f"Installed {self.total_ops} files.\nRemoved {len(removed)} deselected files.\nYou can close the installer."
                 )
                 self.stack.setCurrentIndex(5)
+                self.update_nav()
             except Exception as e:
                 QMessageBox.critical(self, "Install error", str(e))
             finally:
-                self.btn_back.setEnabled(True)
-                self.btn_next.setEnabled(True)
+                # Restore navigation state based on the active page.
+                self.update_nav()
 
 # ========= CLI =========
 def parse_args():
@@ -1389,7 +1470,7 @@ def main():
     if args.silent:
         selected = args.slicers or (detect_slicers(base) if args.all or not args.slicers else [])
         if not selected:
-            selected = ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer"]
+            selected = ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer","QIDIStudio"]
         logging.info(f"Silent mode: slicers={selected}; base={base}")
         headless_install(selected_slicers=selected, base=base)
         try:

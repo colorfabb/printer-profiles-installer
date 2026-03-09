@@ -14,8 +14,11 @@ Supported slicers:
 - OrcaSlicer
 - Bambu Studio
 - AnyCubicSlicer (AnycubicSlicerNext)
+- QIDI Studio
 
 On Windows, AnyCubicSlicer profiles are copied into all detected per-account folders under `%APPDATA%\AnycubicSlicerNext\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
+
+On Windows, QIDI Studio profiles are copied into all detected per-account folders under `%APPDATA%\QIDIStudio\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
 
 ## How to use (end users)
 
@@ -24,7 +27,8 @@ On Windows, AnyCubicSlicer profiles are copied into all detected per-account fol
 	- Stable (direct link to latest): `colorFabbInstaller.exe`
 2. Double-click to start.
 3. Follow the steps in the window (select slicer(s) / location(s) if prompted).
-4. Click **Install** and wait until it shows “Done/Completed”.
+4. Click **Install** on step 3. The installer will switch to step 4 and start copying immediately.
+5. Wait until it shows “Done/Completed”.
 
 Tip: if Windows warns (SmartScreen), verify the **SHA256** (and the digital signature if signing is enabled) on the release.
 

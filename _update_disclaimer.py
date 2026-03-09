@@ -12,11 +12,12 @@ This free installer downloads and installs 3D printing profiles ("Profiles") mai
 • OrcaSlicer
 • Bambu Studio
 • AnyCubicSlicer
+• QIDI Studio
 
 By continuing, you acknowledge and agree that:
 
 Third-party software
-PrusaSlicer, OrcaSlicer, Bambu Studio, and AnyCubicSlicer are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
+PrusaSlicer, OrcaSlicer, Bambu Studio, AnyCubicSlicer, and QIDI Studio are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
 
 Overwriting existing files
 The installer may create, modify, or overwrite profile files in the target slicer's configuration directories. If a profile file with the same filename already exists, it may be replaced. You are responsible for backing up your existing profiles and settings before proceeding.

@@ -6,6 +6,18 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.22] - 2026-03-09
+### Fixed
+- UI: Final "Done" screen now shows a `Close` button (instead of leaving the bottom-right button as `Install`).
+- UI: Back navigation is disabled on the final screen to prevent returning to the install step after completion.
+
+## [1.6.21] - 2026-03-09
+### Added
+- QIDI Studio support: installs filament and process profiles into `%APPDATA%\QIDIStudio\user\<id>\` for all detected numeric user folders, with fallback to `user\default`.
+
+### Changed
+- UI: clicking `Install` on step 3 now opens step 4 and starts the installation immediately.
+
 ## [1.6.20] - 2026-02-05
 ### Added
 - AnyCubicSlicer support: installs filament and process profiles into `%APPDATA%\AnycubicSlicerNext\user\<id>\` (all numeric user folders; falls back to `user\default` if no numeric folders exist).
