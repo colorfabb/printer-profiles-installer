@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.23] - 2026-03-17
+### Added
+- Snapmaker Orca support: installs filament and process profiles into `%APPDATA%\Snapmaker_Orca\user\<id>\` for all detected numeric user folders, with fallback to `user\default`.
+
 ## [1.6.22] - 2026-03-09
 ### Fixed
 - UI: Final "Done" screen now shows a `Close` button (instead of leaving the bottom-right button as `Install`).

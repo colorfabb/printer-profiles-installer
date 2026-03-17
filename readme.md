@@ -6,6 +6,7 @@ This installer helps you download and install the **official colorFabb printer/s
 ## What does this installer do?
 
 - Downloads the latest profiles (ZIP) from GitHub.
+- Downloads profiles from: https://github.com/colorfabb/printer-profiles
 - Validates that the download/ZIP is correct.
 - Installs the profile files into the correct folder(s) for supported slicers.
 
@@ -13,10 +14,15 @@ Supported slicers:
 - PrusaSlicer
 - OrcaSlicer
 - Bambu Studio
+- Snapmaker Orca
 - AnyCubicSlicer (AnycubicSlicerNext)
 - QIDI Studio
 
+On Windows, Bambu Studio profiles are copied into all detected per-account folders under `%APPDATA%\BambuStudio\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
+
 On Windows, AnyCubicSlicer profiles are copied into all detected per-account folders under `%APPDATA%\AnycubicSlicerNext\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
+
+On Windows, Snapmaker Orca profiles are copied into all detected per-account folders under `%APPDATA%\Snapmaker_Orca\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
 
 On Windows, QIDI Studio profiles are copied into all detected per-account folders under `%APPDATA%\QIDIStudio\user\<digits>\` (or `user\default` if no numeric folders exist), for both `filament` and `process`.
 

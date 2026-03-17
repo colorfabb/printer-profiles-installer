@@ -65,7 +65,7 @@ except Exception:
     QColor = object
 
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.22"
+VERSION = "1.6.23"
 
 DISCLAIMER_TEXT = """colorFabb Profile Installer – Disclaimer / Important Information (Free Tool)
 
@@ -74,13 +74,14 @@ This free installer downloads and installs 3D printing profiles ("Profiles") mai
 • PrusaSlicer
 • OrcaSlicer
 • Bambu Studio
+• Snapmaker Orca
 • AnyCubicSlicer
 • QIDI Studio
 
 By continuing, you acknowledge and agree that:
 
 Third-party software
-PrusaSlicer, OrcaSlicer, Bambu Studio, AnyCubicSlicer, and QIDI Studio are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
+PrusaSlicer, OrcaSlicer, Bambu Studio, Snapmaker Orca, AnyCubicSlicer, and QIDI Studio are owned and controlled by third parties. colorFabb does not guarantee compatibility with any specific slicer version, operating system version, or system configuration.
 
 Overwriting existing files
 The installer may create, modify, or overwrite profile files in the target slicer's configuration directories. If a profile file with the same filename already exists, it may be replaced. You are responsible for backing up your existing profiles and settings before proceeding.
@@ -256,6 +257,68 @@ def _discover_anycubic_user_profile_roots(base: Path) -> list[Path]:
 
     return out if out else [default_root]
 
+def _snapmaker_orca_root_from_base(base: Path) -> Path:
+    """Resolve the Snapmaker Orca root folder from a user-provided base path.
+
+    The UI allows browsing any folder, so handle common selections:
+    - %APPDATA% (Roaming)                -> base/Snapmaker_Orca
+    - %APPDATA%/Snapmaker_Orca           -> base
+    - %APPDATA%/Snapmaker_Orca/user      -> base.parent
+    """
+    try:
+        name = base.name.lower()
+    except Exception:
+        name = ""
+
+    if name in {"snapmaker_orca", "snapmakerorca"}:
+        return base
+    if name == "user" and base.parent.name.lower() in {"snapmaker_orca", "snapmakerorca"}:
+        return base.parent
+    return base / "Snapmaker_Orca"
+
+def _discover_snapmaker_orca_user_profile_roots(base: Path) -> list[Path]:
+    """Discover Snapmaker Orca user folders.
+
+    Snapmaker Orca creates per-account folders under %APPDATA%\\Snapmaker_Orca\\user\\<digits>.
+    Multiple accounts can be active, so we return *all* numeric folders, sorted by most recently
+    modified (descending). We fall back to user\\default only if no numeric folders exist.
+    """
+    snap_root = _snapmaker_orca_root_from_base(base)
+    user_root = snap_root / "user"
+    default_root = user_root / "default"
+
+    if not user_root.exists():
+        return [default_root]
+
+    candidates: list[Path] = []
+    try:
+        for d in user_root.iterdir():
+            if not d.is_dir():
+                continue
+            if d.name.isdigit():
+                candidates.append(d)
+    except Exception:
+        candidates = []
+
+    if not candidates:
+        return [default_root]
+
+    try:
+        candidates = sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    out: list[Path] = []
+    for p in candidates:
+        k = str(p)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(p)
+
+    return out if out else [default_root]
+
 def _qidi_studio_root_from_base(base: Path) -> Path:
     """Resolve the QIDIStudio root folder from a user-provided base path.
 
@@ -321,6 +384,7 @@ def _discover_qidi_user_profile_roots(base: Path) -> list[Path]:
 def slicer_targets_from_base(base: Path):
     bambu_user_roots = _discover_bambu_user_profile_roots(base)
     anycubic_user_roots = _discover_anycubic_user_profile_roots(base)
+    snapmaker_orca_user_roots = _discover_snapmaker_orca_user_profile_roots(base)
     qidi_user_roots = _discover_qidi_user_profile_roots(base)
     return {
         "PrusaSlicer": {
@@ -334,6 +398,10 @@ def slicer_targets_from_base(base: Path):
         "BambuStudio": {
             "filament": [p / "filament" for p in bambu_user_roots],
             "process":  [p / "process" for p in bambu_user_roots],
+        },
+        "SnapmakerOrca": {
+            "filament": [p / "filament" for p in snapmaker_orca_user_roots],
+            "process":  [p / "process" for p in snapmaker_orca_user_roots],
         },
         "AnyCubicSlicer": {
             "filament": [p / "filament" for p in anycubic_user_roots],
@@ -526,6 +594,12 @@ def collect_repo_profiles_robust(extracted_root: Path):
                 filament_items.append({"slicer":"BambuStudio","src":p})
             elif "/process/" in path:
                 process_items.append({"slicer":"BambuStudio","src":p,"category":"process"})
+            continue
+        if ("/snapmakerorca/" in path or "/snapmaker_orca/" in path or "/snapmaker orca/" in path) and ext in JSON_EXTS:
+            if "/filament/" in path:
+                filament_items.append({"slicer":"SnapmakerOrca","src":p})
+            elif "/process/" in path:
+                process_items.append({"slicer":"SnapmakerOrca","src":p,"category":"process"})
             continue
         if ("/qidistudio/" in path or "/qidi studio/" in path) and ext in JSON_EXTS:
             if "/filament/" in path:
@@ -756,12 +830,16 @@ if GUI_ENABLED:
 
             self.checks = {}
             self.path_edits = {}
+            label_map = {
+                "QIDIStudio": "QIDI Studio",
+                "SnapmakerOrca": "Snapmaker Orca",
+            }
             def mk_status_text(files_found: int) -> str:
                 return f"✔ {files_found} profiles detected" if files_found > 0 else "✘ Not detected"
 
-            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer","QIDIStudio"]:
+            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","SnapmakerOrca","AnyCubicSlicer","QIDIStudio"]:
                 row = QHBoxLayout()
-                label = "QIDI Studio" if name == "QIDIStudio" else name
+                label = label_map.get(name, name)
                 box = QCheckBox(label)
                 box.stateChanged.connect(lambda *_: self.selection_changed.emit())
                 box.toggled.connect(lambda *_: self.selection_changed.emit())
@@ -814,7 +892,7 @@ if GUI_ENABLED:
             self.selection_changed.emit()
 
         def update_targets(self):
-            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer","QIDIStudio"]:
+            for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","SnapmakerOrca","AnyCubicSlicer","QIDIStudio"]:
                 base = Path(self.path_edits[name].text())
                 self.targets[name] = slicer_targets_from_base(base)[name]
 
@@ -1470,7 +1548,7 @@ def main():
     if args.silent:
         selected = args.slicers or (detect_slicers(base) if args.all or not args.slicers else [])
         if not selected:
-            selected = ["PrusaSlicer","OrcaSlicer","BambuStudio","AnyCubicSlicer","QIDIStudio"]
+            selected = ["PrusaSlicer","OrcaSlicer","BambuStudio","SnapmakerOrca","AnyCubicSlicer","QIDIStudio"]
         logging.info(f"Silent mode: slicers={selected}; base={base}")
         headless_install(selected_slicers=selected, base=base)
         try:
