@@ -314,9 +314,10 @@ if _splash_image is None:
     _splash_image = SPEC_DIR / 'build' / '_cf_splash.png'
     _write_plain_png_splash(_splash_image)
 
-# NOTE: PyInstaller splash is not supported on macOS.
+# NOTE: Keep splash enabled only on Windows. On Linux it requires tkinter/Tcl-Tk
+# support in the build environment, which is not needed for the app itself.
 splash = None
-if not IS_MACOS and _splash_image is not None:
+if IS_WINDOWS and _splash_image is not None:
     splash = Splash(
         str(_splash_image),
         binaries=a.binaries,

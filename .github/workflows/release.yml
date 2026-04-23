@@ -167,11 +167,36 @@ jobs:
             dist/*.dmg
             dist/*.dmg.sha256.txt
 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build AppImage + SHA256
+        shell: bash
+        run: |
+          bash ./build-linux.sh
+
+      - name: Upload artifacts (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.sha256.txt
+
   release:
     runs-on: ubuntu-latest
     needs:
       - build-windows
       - build-macos
+      - build-linux
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -188,6 +213,12 @@ jobs:
           name: macos-dist
           path: dist-artifacts
 
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-dist
+          path: dist-artifacts
+
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
@@ -196,4 +227,6 @@ jobs:
             dist-artifacts/*.sha256.txt
             dist-artifacts/*.dmg
             dist-artifacts/*.dmg.sha256.txt
+            dist-artifacts/*.AppImage
+            dist-artifacts/*.AppImage.sha256.txt
             CHANGELOG.md

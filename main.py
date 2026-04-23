@@ -110,6 +110,13 @@ EXPECTED_SHA256 = None
 PRUSA_EXTS = {".ini"}
 JSON_EXTS  = {".json", ".jso"}
 
+LINUX_FLATPAK_BASES = {
+    "BambuStudio": ("com.bambulab.BambuStudio", "BambuStudio"),
+    "PrusaSlicer": ("com.prusa3d.PrusaSlicer", "PrusaSlicer"),
+    "OrcaSlicer": ("com.orcaslicer.OrcaSlicer", "OrcaSlicer"),
+    "AnyCubicSlicer": ("com.anycubic.SlicerNext", "AnycubicSlicerNext"),
+}
+
 # ========= PATH HELPERS =========
 def appdata_base() -> Path:
     if sys.platform.startswith("win"):
@@ -118,6 +125,65 @@ def appdata_base() -> Path:
         return Path.home() / "Library" / "Application Support"
     else:
         return Path.home() / ".config"
+
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    seen: set[str] = set()
+    out: list[Path] = []
+    for path in paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(path)
+    return out
+
+def _merge_target_values(*values):
+    merged: list[Path] = []
+    for value in values:
+        if not value:
+            continue
+        if isinstance(value, list):
+            merged.extend(value)
+        else:
+            merged.append(value)
+
+    merged = _unique_paths(merged)
+    if not merged:
+        return None
+    if len(merged) == 1:
+        return merged[0]
+    return merged
+
+def _linux_flatpak_app_root(flatpak_id: str, app_dir: str) -> Path:
+    return Path.home() / ".var" / "app" / flatpak_id / "config" / app_dir
+
+def _linux_flatpak_targets():
+    bambu_root = _linux_flatpak_app_root(*LINUX_FLATPAK_BASES["BambuStudio"])
+    anycubic_root = _linux_flatpak_app_root(*LINUX_FLATPAK_BASES["AnyCubicSlicer"])
+    prusa_root = _linux_flatpak_app_root(*LINUX_FLATPAK_BASES["PrusaSlicer"])
+    orca_root = _linux_flatpak_app_root(*LINUX_FLATPAK_BASES["OrcaSlicer"])
+
+    bambu_user_roots = _discover_bambu_user_profile_roots(bambu_root.parent)
+    anycubic_user_roots = _discover_anycubic_user_profile_roots(anycubic_root.parent)
+
+    return {
+        "PrusaSlicer": {
+            "filament": prusa_root / "filament",
+            "print":    prusa_root / "print",
+        },
+        "OrcaSlicer": {
+            "filament": orca_root / "user" / "default" / "filament",
+            "process":  orca_root / "user" / "default" / "process",
+        },
+        "BambuStudio": {
+            "filament": [p / "filament" for p in bambu_user_roots],
+            "process":  [p / "process" for p in bambu_user_roots],
+        },
+        "AnyCubicSlicer": {
+            "filament": [p / "filament" for p in anycubic_user_roots],
+            "process":  [p / "process" for p in anycubic_user_roots],
+        },
+    }
 
 def _bambu_studio_root_from_base(base: Path) -> Path:
     """Resolve the BambuStudio root folder from a user-provided base path.
@@ -386,7 +452,7 @@ def slicer_targets_from_base(base: Path):
     anycubic_user_roots = _discover_anycubic_user_profile_roots(base)
     snapmaker_orca_user_roots = _discover_snapmaker_orca_user_profile_roots(base)
     qidi_user_roots = _discover_qidi_user_profile_roots(base)
-    return {
+    targets = {
         "PrusaSlicer": {
             "filament": base / "PrusaSlicer" / "filament",
             "print":    base / "PrusaSlicer" / "print",
@@ -412,6 +478,21 @@ def slicer_targets_from_base(base: Path):
             "process":  [p / "process" for p in qidi_user_roots],
         },
     }
+
+    if not sys.platform.startswith("linux"):
+        return targets
+
+    flatpak_targets = _linux_flatpak_targets()
+    merged_targets = {}
+    for slicer, categories in targets.items():
+        merged_targets[slicer] = {}
+        flatpak_categories = flatpak_targets.get(slicer, {})
+        for category in sorted(set(categories) | set(flatpak_categories)):
+            merged_targets[slicer][category] = _merge_target_values(
+                categories.get(category),
+                flatpak_categories.get(category),
+            )
+    return merged_targets
 
 # ========= TEMP =========
 TEMP_ROOT = Path(tempfile.gettempdir()) / "colorfabb_installer"
@@ -834,8 +915,13 @@ if GUI_ENABLED:
                 "QIDIStudio": "QIDI Studio",
                 "SnapmakerOrca": "Snapmaker Orca",
             }
-            def mk_status_text(files_found: int) -> str:
-                return f"✔ {files_found} profiles detected" if files_found > 0 else "✘ Not detected"
+            def mk_status_text(cats: dict[str, Path | list[Path]]) -> tuple[str, str]:
+                files_found = _count_target_files(cats)
+                if files_found > 0:
+                    return (f"✔ {files_found} profiles detected", "#0a8f08")
+                if _target_paths_exist(cats):
+                    return ("✔ Slicer detected", "#0a8f08")
+                return ("✘ Not detected", "#c60000")
 
             for name in ["PrusaSlicer","OrcaSlicer","BambuStudio","SnapmakerOrca","AnyCubicSlicer","QIDIStudio"]:
                 row = QHBoxLayout()
@@ -846,19 +932,11 @@ if GUI_ENABLED:
                 self.checks[name] = box
 
                 cats = self.targets[name]
-                files_found = 0
-                for p in cats.values():
-                    if isinstance(p, list):
-                        for pp in p:
-                            if pp.exists():
-                                files_found += sum(1 for f in pp.glob("**/*") if f.is_file())
-                    else:
-                        if p.exists():
-                            files_found += sum(1 for f in p.glob("**/*") if f.is_file())
-                status = QLabel(mk_status_text(files_found))
-                status.setStyleSheet("color:{};".format("#0a8f08" if files_found>0 else "#c60000"))
+                status_text, status_color = mk_status_text(cats)
+                status = QLabel(status_text)
+                status.setStyleSheet(f"color:{status_color};")
 
-                edit = QLineEdit(str(self.base)); edit.setFixedWidth(360)
+                edit = QLineEdit(str(_display_base_for_slicer(name, cats))); edit.setFixedWidth(360)
                 self.path_edits[name] = edit
 
                 btn = QPushButton("Browse…"); btn.setStyleSheet("QPushButton{background:#FFC400;color:#111;border-radius:8px;}")
@@ -870,17 +948,9 @@ if GUI_ENABLED:
                             self.path_edits[s].setText(sel[0])
                             self.update_targets()
                             cats2 = self.targets[s]
-                            files = 0
-                            for pth in cats2.values():
-                                if isinstance(pth, list):
-                                    for pp in pth:
-                                        if pp.exists():
-                                            files += sum(1 for f in pp.glob("**/*") if f.is_file())
-                                else:
-                                    if pth.exists():
-                                        files += sum(1 for f in pth.glob("**/*") if f.is_file())
-                            status.setText(mk_status_text(files))
-                            status.setStyleSheet("color:{};".format("#0a8f08" if files>0 else "#c60000"))
+                            status_text, status_color = mk_status_text(cats2)
+                            status.setText(status_text)
+                            status.setStyleSheet(f"color:{status_color};")
                             self.base_changed.emit()
                 btn.clicked.connect(pick)
 
@@ -1393,7 +1463,7 @@ def parse_args():
     ap.add_argument('--uninstall', action='store_true', help='Remove files installed by this installer')
     ap.add_argument('--dry-run', action='store_true', help='Only report what would be removed (with --uninstall)')
     ap.add_argument('--check-download', action='store_true', help='Download + validate the profiles ZIP (no install)')
-    ap.add_argument('--base', default=None, help='Override base folder (defaults to %%APPDATA%%)')
+    ap.add_argument('--base', default=None, help='Override the slicer app-data base folder (defaults to the platform standard location)')
     return ap.parse_args()
 
 def check_download_only() -> None:
@@ -1451,6 +1521,55 @@ def detect_slicers(base: Path) -> list[str]:
             detected.append(s)
     return detected
 
+def _target_paths_exist(targets: dict[str, Path | list[Path]]) -> bool:
+    for path_value in targets.values():
+        if isinstance(path_value, list):
+            for path in path_value:
+                if path.exists() or path.parent.exists():
+                    return True
+        else:
+            if path_value.exists() or path_value.parent.exists():
+                return True
+    return False
+
+def _count_target_files(targets: dict[str, Path | list[Path]]) -> int:
+    files_found = 0
+    for path_value in targets.values():
+        if isinstance(path_value, list):
+            for path in path_value:
+                if path.exists():
+                    files_found += sum(1 for f in path.glob("**/*") if f.is_file())
+        else:
+            if path_value.exists():
+                files_found += sum(1 for f in path_value.glob("**/*") if f.is_file())
+    return files_found
+
+def _flatten_target_paths(targets: dict[str, Path | list[Path]]) -> list[Path]:
+    paths: list[Path] = []
+    for path_value in targets.values():
+        if isinstance(path_value, list):
+            paths.extend(path_value)
+        else:
+            paths.append(path_value)
+    return _unique_paths(paths)
+
+def _target_root_for_display(slicer_name: str, target_path: Path) -> Path:
+    if slicer_name == "PrusaSlicer":
+        return target_path.parent
+    if slicer_name in {"OrcaSlicer", "BambuStudio", "SnapmakerOrca", "AnyCubicSlicer", "QIDIStudio"}:
+        return target_path.parent.parent.parent
+    return target_path.parent
+
+def _display_base_for_slicer(slicer_name: str, targets: dict[str, Path | list[Path]]) -> Path:
+    candidates = [_target_root_for_display(slicer_name, path) for path in _flatten_target_paths(targets)]
+    candidates = _unique_paths(candidates)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0] if candidates else appdata_base()
+
 def headless_install(selected_slicers: list[str], base: Path):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     zip_path = CACHE_DIR / "profiles.zip"
@@ -1495,16 +1614,21 @@ def main():
     setup_logging()
     args = parse_args()
 
-    # If running as a PyInstaller onefile build with splash enabled, make sure it does not linger.
-    try:
-        import pyi_splash  # provided by PyInstaller at runtime
-        if getattr(pyi_splash, 'is_alive', lambda: False)():
-            try:
-                pyi_splash.update_text("Loading installer...")
-            except Exception:
-                pass
-    except Exception:
-        pyi_splash = None  # type: ignore
+    # Splash support is Windows-only in the PyInstaller spec. Keep the runtime
+    # import dynamic so Linux builds do not activate PyInstaller's splash hook.
+    pyi_splash = None  # type: ignore
+    if sys.platform.startswith("win"):
+        try:
+            import importlib
+
+            pyi_splash = importlib.import_module("pyi_splash")
+            if getattr(pyi_splash, 'is_alive', lambda: False)():
+                try:
+                    pyi_splash.update_text("Loading installer...")
+                except Exception:
+                    pass
+        except Exception:
+            pyi_splash = None  # type: ignore
 
     base = Path(args.base) if args.base else appdata_base()
     TEMP_ROOT.mkdir(parents=True, exist_ok=True)

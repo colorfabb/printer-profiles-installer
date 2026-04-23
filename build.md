@@ -2,7 +2,7 @@
 
 This repo builds a Windows **single-file** installer EXE (PyInstaller onefile).
 
-macOS builds are also supported, but must be built on macOS (PyInstaller does not cross-build macOS from Windows).
+macOS and Linux builds are also supported, but must be built on their respective platforms.
 
 ## Build (local)
 
@@ -32,6 +32,25 @@ Remove-Item -Recurse -Force .\dist, .\build -ErrorAction SilentlyContinue
 
 python -m PyInstaller --noconfirm --clean ".\colorFabb Filament Installer.spec"
 ```
+
+## Build on Linux (Ubuntu)
+
+On Linux, use the helper script:
+
+```bash
+bash ./build-linux.sh
+```
+
+This creates:
+- a Linux PyInstaller binary in `dist/`
+- a stable Linux binary at `dist/colorFabbInstaller`
+- a versioned AppImage in `dist/`
+- a stable `colorFabbInstaller-x86_64.AppImage`
+- matching `sha256` files for each artifact
+
+Linux installer targets:
+- Native/AppImage-style slicer configs in `~/.config/...`
+- Flatpak slicer configs in `~/.var/app/.../config/...`
 
 ## Release build (recommended)
 
@@ -67,6 +86,12 @@ The GitHub Actions workflow builds and uploads:
 - `dist\colorFabbInstaller_vX.Y.Z.sha256.txt`
 - `dist/colorFabbInstaller_vX.Y.Z.dmg`
 - `dist/colorFabbInstaller_vX.Y.Z.dmg.sha256.txt`
+- `dist/colorFabbInstaller_vX.Y.Z-x86_64.AppImage`
+- `dist/colorFabbInstaller_vX.Y.Z-x86_64.AppImage.sha256.txt`
+- `dist/colorFabbInstaller`
+- `dist/colorFabbInstaller.sha256.txt`
+- `dist/colorFabbInstaller-x86_64.AppImage`
+- `dist/colorFabbInstaller-x86_64.AppImage.sha256.txt`
 
 ## Code signing
 
