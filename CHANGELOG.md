@@ -6,6 +6,16 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.24] - 2026-04-24
+### Added
+- Ubuntu Linux support: native config detection and installation for supported slicers under `~/.config/...`.
+- Flatpak config detection and installation for supported slicers under `~/.var/app/.../config/...`.
+- Linux build and release artifacts: native binary, AppImage, and SHA256 checksum files.
+
+### Changed
+- UI: slicer detection on Linux now reports installed slicers based on config roots and shows slicer-specific paths.
+- Packaging: PyInstaller splash screen is now Windows-only so Linux builds do not depend on tkinter/Tcl-Tk.
+
 ## [1.6.23] - 2026-03-17
 ### Added
 - Snapmaker Orca support: installs filament and process profiles into `%APPDATA%\Snapmaker_Orca\user\<id>\` for all detected numeric user folders, with fallback to `user\default`.
