@@ -65,7 +65,7 @@ except Exception:
     QColor = object
 
 APP_DISPLAY_NAME = "colorFabb Filament Installer"
-VERSION = "1.6.24"
+VERSION = "1.6.25"
 
 DISCLAIMER_TEXT = """colorFabb Profile Installer – Disclaimer / Important Information (Free Tool)
 

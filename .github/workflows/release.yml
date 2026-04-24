@@ -188,6 +188,8 @@ jobs:
         with:
           name: linux-dist
           path: |
+            dist/colorFabbInstaller
+            dist/colorFabbInstaller.sha256.txt
             dist/*.AppImage
             dist/*.AppImage.sha256.txt
 
@@ -227,6 +229,7 @@ jobs:
             dist-artifacts/*.sha256.txt
             dist-artifacts/*.dmg
             dist-artifacts/*.dmg.sha256.txt
+            dist-artifacts/colorFabbInstaller
             dist-artifacts/*.AppImage
             dist-artifacts/*.AppImage.sha256.txt
             CHANGELOG.md

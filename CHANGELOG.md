@@ -6,6 +6,10 @@ The format is based on *Keep a Changelog*, and this project follows *Semantic Ve
 
 ## [Unreleased]
 
+## [1.6.25] - 2026-04-24
+### Fixed
+- GitHub Releases now publish the Linux native binary alongside the Linux AppImage and checksum files.
+
 ## [1.6.24] - 2026-04-24
 ### Added
 - Ubuntu Linux support: native config detection and installation for supported slicers under `~/.config/...`.
